@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0d0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tape">
+<meta name="description" content="Tape — an ICT/SMC trading journal for ES futures. On the record.">
+<title>Tape</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* base — neutral near-black, restrained like the finance ref */
+  --bg:#0c0d0f; --bg-soft:#111316; --surface:#16181b; --surface-2:#1d2025; --surface-3:#23272d;
+  --border:#1f2226; --border-soft:#262a2f; --border-bright:#343a41;
+  --text:#f3f4f6; --text-dim:#a3aab2; --text-muted:#6a7078;
+  /* brand accent — violet / periwinkle */
+  --accent:#3585ff; --accent-soft:#66a5ff; --accent-dim:#1d3c66; --accent-glow:rgba(53,133,255,.16);
+  /* data semantics */
+  --green:#3ddc97; --green-soft:#74e3b4; --green-dim:#1d4d39; --green-glow:rgba(61,220,151,.12);
+  --red:#ff6f6f; --red-soft:#ff9b9b; --red-dim:#5a2d2d; --red-glow:rgba(255,111,111,.12);
+  --amber:#f5c451; --amber-soft:#f7d27c; --amber-dim:#574826; --amber-glow:rgba(245,196,81,.12);
+  --info:#3585ff; --info-dim:#1d3c66; --info-glow:rgba(53,133,255,.15);
+  /* type — single clean family */
+  --serif:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  --sans:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'Plus Jakarta Sans',-apple-system,sans-serif;
+  --radius:14px; --radius-lg:20px; --radius-sm:10px; --pill:999px;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.16);
+  --shadow-lg:0 16px 50px rgba(0,0,0,.55);
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; line-height:1.5;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; overscroll-behavior-y:none;
+  letter-spacing:-.011em;
+}
+.num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1}
+::selection{background:var(--accent-glow)}
+button{font-family:inherit; cursor:pointer; color:inherit; background:none; border:none}
+input,select,textarea{font-family:inherit; font-size:16px; color:var(--text)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:5px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important; transition-duration:.01ms!important}}
+
+/* ===== shell ===== */
+.app{max-width:660px; margin:0 auto; min-height:100dvh; padding-bottom:calc(var(--safe-b) + 92px)}
+body.on-log .app{padding-bottom:calc(var(--safe-b) + 156px)}
+header{
+  position:sticky; top:0; z-index:40; padding:calc(var(--safe-t) + 16px) 20px 14px;
+  background:linear-gradient(to bottom,var(--bg) 64%,rgba(12,13,15,.82) 100%);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.brand{display:flex; align-items:center; gap:11px}
+.brand h1{font-size:23px; font-weight:800; letter-spacing:-.035em; line-height:1}
+.brand h1 em{color:var(--accent); font-style:normal}
+.brand .tag{font-size:11.5px; color:var(--text-muted); font-weight:500; letter-spacing:0; padding-top:2px}
+.hdr-btn{width:38px; height:38px; border-radius:12px; background:var(--surface); border:1px solid var(--border-bright); display:grid; place-items:center; transition:all .15s}
+.hdr-btn:active{transform:scale(.95); background:var(--surface-2)}
+.hdr-btn svg{width:18px; height:18px; stroke:var(--text-dim); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round}
+
+main{padding:8px 16px 0; animation:fade .28s ease}
+@keyframes fade{from{opacity:0; transform:translateY(5px)} to{opacity:1; transform:none}}
+.view{display:none}
+.view.active{display:block}
+
+/* ===== cards ===== */
+.section{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:14px; box-shadow:var(--shadow); overflow:hidden}
+.section-head{padding:17px 18px 0; display:flex; align-items:center; gap:11px}
+.section-num{font-size:12px; font-weight:700; color:var(--accent); background:var(--accent-glow); width:24px; height:24px; border-radius:8px; display:grid; place-items:center; flex:none}
+.section-title{font-size:15px; font-weight:700; letter-spacing:-.02em}
+.section-title small{display:block; font-size:11.5px; font-weight:500; color:var(--text-muted); letter-spacing:0; margin-top:2px}
+.section-body{padding:16px 18px 18px}
+
+/* ===== form ===== */
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.field{margin-bottom:15px}
+.field:last-child{margin-bottom:0}
+.field.span2{grid-column:1/-1}
+label.lbl{display:block; font-size:12.5px; color:var(--text-dim); font-weight:600; margin-bottom:8px; letter-spacing:-.005em}
+label.lbl .req{color:var(--red-soft)}
+.hint-txt{font-size:11.5px; color:var(--text-muted); margin-top:7px; line-height:1.5}
+
+input[type=text],input[type=number],input[type=date],input[type=time],textarea,select{
+  width:100%; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:12px 13px; transition:border-color .15s,box-shadow .15s; color:var(--text); -webkit-appearance:none; appearance:none;
+}
+input[type=number]{font-variant-numeric:tabular-nums}
+input::placeholder,textarea::placeholder{color:var(--text-muted)}
+input:focus,textarea:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); outline:none}
+textarea{resize:vertical; min-height:84px; line-height:1.6}
+select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4 L5 7 L8 4' stroke='%23a3aab2' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat:no-repeat; background-position:right 12px center; padding-right:32px}
+input[type=date],input[type=time]{min-height:46px}
+
+/* chips */
+.chips{display:flex; gap:9px; flex-wrap:wrap}
+.chip{flex:1 1 auto; min-width:66px; min-height:46px; display:inline-flex; align-items:center; justify-content:center; gap:8px; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius); font-size:14.5px; font-weight:600; color:var(--text-dim); padding:0 14px; transition:all .15s; user-select:none; -webkit-tap-highlight-color:transparent}
+.chip:active{transform:scale(.97)}
+.chip .dot{width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.5}
+.chip.on{color:var(--text); border-color:var(--accent-dim); background:var(--accent-glow)}
+.chip.on.long,.chip.on.win,.chip.on.with{color:var(--green); border-color:var(--green-dim); background:var(--green-glow)}
+.chip.on.short,.chip.on.loss,.chip.on.counter{color:var(--red); border-color:var(--red-dim); background:var(--red-glow)}
+.chip.on.be{color:var(--amber); border-color:var(--amber-dim); background:var(--amber-glow)}
+
+/* small multi tags */
+.tags{display:flex; flex-wrap:wrap; gap:8px}
+.t{min-height:38px; display:inline-flex; align-items:center; padding:0 14px; border-radius:var(--pill); background:var(--bg-soft); border:1px solid var(--border-soft); font-size:13.5px; font-weight:600; color:var(--text-dim); transition:all .14s; -webkit-tap-highlight-color:transparent}
+.t:active{transform:scale(.96)}
+.t.on{color:var(--text); background:var(--surface-2); border-color:var(--accent-dim)}
+.t.good.on{color:var(--green); border-color:var(--green-dim); background:var(--green-glow)}
+.t.bad.on{color:var(--red); border-color:var(--red-dim); background:var(--red-glow)}
+.t.leak.on{color:var(--amber); border-color:var(--amber-dim); background:var(--amber-glow)}
+
+/* confluence */
+.conf{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.conf-item{position:relative; display:flex; align-items:center; gap:10px; min-height:48px; padding:0 12px; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius); transition:all .15s; -webkit-tap-highlight-color:transparent}
+.conf-item:active{transform:scale(.985)}
+.conf-check{width:19px; height:19px; border-radius:6px; border:1.5px solid var(--border-bright); flex:none; display:grid; place-items:center; transition:all .15s}
+.conf-check svg{opacity:0; transition:opacity .12s}
+.conf-check svg path{stroke:#0c0d0f}
+.conf-item.on{border-color:var(--accent-dim); background:var(--accent-glow)}
+.conf-item.on .conf-check{background:var(--accent); border-color:var(--accent)}
+.conf-item.on .conf-check svg{opacity:1}
+.conf-name{font-size:13.5px; font-weight:600; flex:1}
+.conf-item .tf{font-size:11.5px; font-weight:600; background:var(--surface-2); border:1px solid var(--border-soft); border-radius:7px; padding:4px 5px; min-height:30px; min-width:50px; background-position:right 7px center; padding-right:22px}
+
+/* SL */
+.num-wrap{position:relative; flex:1 1 120px; min-width:120px}
+.num-wrap input{padding-right:36px}
+.steppers{position:absolute; right:6px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:3px}
+.stepper{width:26px; height:18px; display:grid; place-items:center; border-radius:5px; background:var(--surface-2); border:1px solid var(--border-soft)}
+.stepper svg{width:10px; height:10px; stroke:var(--text-dim); stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round}
+.stepper:active{background:var(--surface-3)}
+
+/* R preview */
+.r-prev{margin-top:10px; display:flex; align-items:center; justify-content:space-between; padding:11px 13px; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius)}
+.r-prev-l{font-size:12.5px; font-weight:500; color:var(--text-muted)}
+.r-prev-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em; color:var(--text-muted)}
+.r-prev-v.pos{color:var(--green)} .r-prev-v.neg{color:var(--red)}
+
+/* grade */
+.grade{display:grid; grid-template-columns:repeat(4,1fr); gap:9px}
+.grade-btn{min-height:58px; border-radius:var(--radius); background:var(--bg-soft); border:1px solid var(--border-soft); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; transition:all .15s}
+.grade-btn:active{transform:scale(.97)}
+.grade-btn .g{font-size:23px; font-weight:800; line-height:1; letter-spacing:-.03em; color:var(--text-dim)}
+.grade-btn .gd{font-size:9.5px; font-weight:600; color:var(--text-muted); letter-spacing:.02em; text-transform:uppercase}
+.grade-btn.on{border-color:var(--accent-dim); background:var(--surface-2)}
+.grade-btn.on .g{color:var(--text)}
+.grade-btn[data-grade="A"].on{border-color:var(--green-dim); background:var(--green-glow)} .grade-btn[data-grade="A"].on .g{color:var(--green)}
+.grade-btn[data-grade="B"].on .g{color:var(--accent)}
+.grade-btn[data-grade="C"].on{border-color:var(--amber-dim); background:var(--amber-glow)} .grade-btn[data-grade="C"].on .g{color:var(--amber)}
+.grade-btn[data-grade="D"].on{border-color:var(--red-dim); background:var(--red-glow)} .grade-btn[data-grade="D"].on .g{color:var(--red)}
+
+/* discipline */
+.disc{display:flex; flex-direction:column; gap:9px}
+.disc-item{display:flex; align-items:center; gap:12px; min-height:46px; padding:0 13px; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius); transition:all .15s}
+.disc-item:active{transform:scale(.99)}
+.disc-box{width:21px; height:21px; border-radius:7px; border:1.5px solid var(--border-bright); flex:none; display:grid; place-items:center; transition:all .15s}
+.disc-box svg{opacity:0; transition:opacity .12s} .disc-box svg path{stroke:#0c0d0f}
+.disc-item.on{border-color:var(--accent-dim)}
+.disc-item.on .disc-box{background:var(--accent); border-color:var(--accent)}
+.disc-item.on .disc-box svg{opacity:1}
+.disc-txt{font-size:14px; font-weight:600}
+.disc-txt small{display:block; font-size:11.5px; font-weight:500; color:var(--text-muted)}
+
+/* photo */
+.photo-zone{border:1.5px dashed var(--border-bright); border-radius:var(--radius-lg); padding:20px 16px; text-align:center; transition:all .18s; background:var(--bg-soft); position:relative}
+.photo-zone.drag{border-color:var(--accent); background:var(--accent-glow)}
+.photo-actions{display:flex; gap:9px; justify-content:center; margin-bottom:11px; flex-wrap:wrap}
+.pa-btn{display:inline-flex; align-items:center; gap:8px; min-height:46px; padding:0 17px; border-radius:var(--radius); background:var(--surface-2); border:1px solid var(--border-bright); font-size:14px; font-weight:600; color:var(--text); transition:all .15s}
+.pa-btn:active{transform:scale(.97)} .pa-btn:hover{background:var(--surface-3)}
+.pa-btn svg{width:17px; height:17px; stroke:var(--accent); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round}
+.photo-hint{font-size:12px; color:var(--text-muted); line-height:1.55}
+.photo-hint b{color:var(--text-dim); font-weight:600}
+.photo-preview{position:relative; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); margin-top:2px}
+.photo-preview img{display:block; width:100%; max-height:300px; object-fit:contain; background:#08090a}
+.photo-x{position:absolute; top:9px; right:9px; width:34px; height:34px; border-radius:10px; background:rgba(8,9,10,.78); border:1px solid var(--border-bright); display:grid; place-items:center; backdrop-filter:blur(6px)}
+.photo-x svg{width:14px; height:14px; stroke:#fff; stroke-width:1.9; stroke-linecap:round}
+
+/* save bar */
+.savebar{position:fixed; left:0; right:0; bottom:calc(var(--safe-b) + 84px); z-index:35; padding:0 16px; display:flex; gap:11px; max-width:660px; margin:0 auto; pointer-events:none}
+.savebar > *{pointer-events:auto}
+.btn{flex:1; min-height:54px; border-radius:var(--radius); font-size:15.5px; font-weight:700; letter-spacing:-.01em; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all .15s}
+.btn.primary{background:var(--accent); color:#fff; box-shadow:0 8px 28px rgba(53,133,255,.34)}
+.btn.primary:active{transform:scale(.98); background:var(--accent-soft)}
+.btn.primary:disabled{opacity:.45; box-shadow:none}
+.btn.ghost{flex:0 0 auto; background:var(--surface-2); border:1px solid var(--border-bright); color:var(--text-dim); padding:0 20px; backdrop-filter:blur(8px)}
+.btn.ghost:active{background:var(--surface-3)}
+
+/* ===== floating nav ===== */
+.nav{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-b) + 16px); z-index:50; display:flex; gap:4px; padding:5px; background:rgba(22,24,27,.78); backdrop-filter:blur(22px) saturate(1.5); -webkit-backdrop-filter:blur(22px) saturate(1.5); border:1px solid var(--border-bright); border-radius:var(--pill); box-shadow:0 12px 40px rgba(0,0,0,.5); max-width:none; margin:0; height:auto}
+.nav-btn{flex:0 0 auto; flex-direction:row; gap:7px; display:inline-flex; align-items:center; justify-content:center; padding:10px 17px; border-radius:var(--pill); color:var(--text-muted); transition:all .18s}
+.nav-btn svg{width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round}
+.nav-btn span{font-size:13px; font-weight:700; letter-spacing:-.01em}
+.nav-btn.on{color:#fff; background:var(--accent)}
+
+/* ===== journal ===== */
+.j-filters{display:flex; gap:8px; overflow-x:auto; padding:2px 0 14px; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.j-filters::-webkit-scrollbar{display:none}
+.fbtn{flex:none; min-height:36px; padding:0 15px; border-radius:var(--pill); background:var(--surface); border:1px solid var(--border-soft); font-size:13px; font-weight:600; color:var(--text-dim); white-space:nowrap; transition:all .15s}
+.fbtn.on{color:#fff; background:var(--accent); border-color:var(--accent)}
+
+.entry{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:11px; overflow:hidden; box-shadow:var(--shadow); transition:border-color .15s,transform .12s; cursor:pointer; display:flex}
+.entry:active{border-color:var(--border-bright); transform:scale(.992)}
+.entry-thumb{width:88px; flex:none; background:#08090a; position:relative; overflow:hidden}
+.entry-thumb img{width:100%; height:100%; object-fit:cover; position:absolute; inset:0}
+.entry-thumb.empty{display:grid; place-items:center}
+.entry-thumb.empty svg{width:22px; height:22px; stroke:var(--text-muted); fill:none; stroke-width:1.5}
+.entry-body{flex:1; padding:13px 14px; min-width:0}
+.entry-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
+.entry-meta{display:flex; align-items:center; gap:9px; min-width:0}
+.dir-badge{font-size:10px; font-weight:800; letter-spacing:.05em; padding:4px 8px; border-radius:6px; text-transform:uppercase; flex:none}
+.dir-badge.long{color:var(--green); background:var(--green-glow); border:1px solid var(--green-dim)}
+.dir-badge.short{color:var(--red); background:var(--red-glow); border:1px solid var(--red-dim)}
+.entry-date{font-size:12.5px; font-weight:500; color:var(--text-dim); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.entry-r{font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em; flex:none}
+.entry-r.pos{color:var(--green)} .entry-r.neg{color:var(--red)} .entry-r.flat{color:var(--text-muted)}
+.entry-tags{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.gpill{font-size:12px; font-weight:800; width:25px; height:23px; display:grid; place-items:center; border-radius:6px; flex:none; border:1px solid var(--border-soft); color:var(--text-dim)}
+.gpill.A{color:var(--green); border-color:var(--green-dim); background:var(--green-glow)} .gpill.B{color:var(--accent); border-color:var(--accent-dim); background:var(--accent-glow)}
+.gpill.C{color:var(--amber); border-color:var(--amber-dim); background:var(--amber-glow)} .gpill.D{color:var(--red); border-color:var(--red-dim); background:var(--red-glow)}
+.mini-tag{font-size:11.5px; font-weight:500; color:var(--text-muted); background:var(--bg-soft); border:1px solid var(--border-soft); padding:3px 8px; border-radius:6px; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis}
+.mini-tag.leak{color:var(--amber); border-color:var(--amber-dim)}
+
+/* empty */
+.empty-state{text-align:center; padding:58px 24px; color:var(--text-muted)}
+.empty-state svg{width:42px; height:42px; stroke:var(--border-bright); fill:none; stroke-width:1.4; margin-bottom:16px}
+.empty-state h3{font-size:19px; font-weight:700; letter-spacing:-.02em; color:var(--text-dim); margin-bottom:7px}
+.empty-state p{font-size:13.5px; max-width:280px; margin:0 auto; line-height:1.55}
+
+/* ===== insights ===== */
+.stat-row{display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:14px}
+.stat{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:15px 16px; box-shadow:var(--shadow)}
+.stat:first-child{grid-column:1/-1; background:linear-gradient(140deg,var(--surface-2),var(--surface)); padding:18px 18px}
+.stat .sv{font-size:27px; font-weight:800; line-height:1.05; letter-spacing:-.035em; font-variant-numeric:tabular-nums}
+.stat:first-child .sv{font-size:42px}
+.stat .sv.pos{color:var(--green)} .stat .sv.neg{color:var(--red)}
+.stat .sl{font-size:11.5px; font-weight:500; color:var(--text-muted); margin-top:5px; letter-spacing:-.005em}
+.stat .sl b{color:var(--text-dim); font-weight:600}
+
+.ins-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:17px 18px; margin-bottom:14px; box-shadow:var(--shadow)}
+.ins-title{font-size:13.5px; font-weight:700; letter-spacing:-.01em; color:var(--text); margin-bottom:4px; display:flex; align-items:center; gap:8px}
+.ins-title svg{width:16px; height:16px; stroke:var(--text-dim); fill:none; stroke-width:1.7}
+.ins-sub{font-size:11.5px; font-weight:500; color:var(--text-muted); margin-bottom:15px; line-height:1.5}
+
+/* donut */
+.donut-wrap{display:flex; align-items:center; gap:18px}
+.donut{width:140px; flex:none}
+.donut svg{display:block; width:100%; height:auto}
+.donut-legend{flex:1; display:flex; flex-direction:column; gap:9px; min-width:0}
+.leg-row{display:flex; align-items:center; gap:9px}
+.leg-dot{width:9px; height:9px; border-radius:3px; flex:none}
+.leg-name{font-size:12.5px; font-weight:600; color:var(--text-dim); flex:1}
+.leg-name small{font-weight:500; color:var(--text-muted)}
+.leg-val{font-size:12.5px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums}
+.donut-mid-num{font-size:26px; font-weight:800; letter-spacing:-.04em; fill:var(--text)}
+.donut-mid-lbl{font-size:9.5px; font-weight:600; letter-spacing:.06em; fill:var(--text-muted)}
+
+/* distribution bars (leaks) */
+.dist{display:flex; flex-direction:column; gap:11px}
+.dist-row{display:flex; align-items:center; gap:11px}
+.dist-lbl{font-size:15px; font-weight:800; width:18px; flex:none; text-align:center; color:var(--text-dim)}
+.dist-bar{flex:1; height:9px; background:var(--bg-soft); border-radius:5px; overflow:hidden}
+.dist-fill{height:100%; border-radius:5px; transition:width .55s cubic-bezier(.2,.8,.2,1)}
+.dist-val{font-size:12.5px; font-weight:600; color:var(--text-dim); width:60px; text-align:right; flex:none; font-variant-numeric:tabular-nums}
+
+/* discipline tax */
+.tax{display:flex; align-items:stretch; border:1px solid var(--border-soft); border-radius:var(--radius); overflow:hidden; background:var(--bg-soft)}
+.tax-cell{flex:1; padding:14px 12px; text-align:center}
+.tax-cell + .tax-cell{border-left:1px solid var(--border-soft)}
+.tax-cell .tcv{font-size:21px; font-weight:800; letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+.tax-cell .tcl{font-size:10.5px; font-weight:500; color:var(--text-muted); margin-top:4px; letter-spacing:-.005em}
+
+/* emotion impact */
+.emo-row{display:flex; align-items:center; gap:11px; padding:10px 0; border-top:1px solid var(--border-soft)}
+.emo-row:first-child{border-top:none}
+.emo-name{font-size:13px; font-weight:600; flex:1}
+.emo-bar-wrap{flex:1.4; height:8px; background:var(--bg-soft); border-radius:4px; position:relative; overflow:hidden}
+.emo-bar{position:absolute; top:0; bottom:0; border-radius:4px}
+.emo-mid{position:absolute; top:-2px; bottom:-2px; left:50%; width:1px; background:var(--border-bright)}
+.emo-val{font-size:13px; font-weight:700; width:56px; text-align:right; flex:none; font-variant-numeric:tabular-nums}
+.emo-n{font-size:10.5px; font-weight:500; color:var(--text-muted); width:42px; text-align:right; flex:none; font-variant-numeric:tabular-nums}
+
+/* equity */
+.eq-wrap{margin:2px -6px -2px}
+svg.eq{display:block; width:100%; height:auto}
+
+/* AI */
+.ai-card{background:linear-gradient(155deg,var(--surface-2),var(--bg-soft)); border:1px solid var(--accent-dim); border-radius:var(--radius-lg); padding:18px; margin-bottom:14px; position:relative; overflow:hidden}
+.ai-card::before{content:""; position:absolute; top:-35%; right:-12%; width:180px; height:180px; background:radial-gradient(circle,var(--accent-glow),transparent 70%); pointer-events:none}
+.ai-head{display:flex; align-items:center; gap:10px; margin-bottom:6px; position:relative}
+.ai-head svg{width:19px; height:19px; stroke:var(--accent-soft); fill:none; stroke-width:1.7}
+.ai-head h3{font-size:14.5px; font-weight:700; letter-spacing:-.01em}
+.ai-card p.ai-desc{font-size:12px; font-weight:500; color:var(--text-muted); line-height:1.55; margin-bottom:14px; position:relative}
+.ai-btn{width:100%; min-height:48px; border-radius:var(--radius); background:var(--accent); color:#fff; font-size:14.5px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all .15s; position:relative}
+.ai-btn:active{transform:scale(.98)} .ai-btn:disabled{opacity:.55}
+.ai-btn svg{width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2}
+.ai-out{margin-top:15px; padding-top:15px; border-top:1px solid var(--accent-dim); font-size:13.5px; line-height:1.65; color:var(--text); white-space:pre-wrap; display:none; position:relative}
+.ai-out.show{display:block; animation:fade .3s}
+.ai-out strong{color:var(--accent-soft); font-weight:700}
+.spin{width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ===== modal ===== */
+.scrim{position:fixed; inset:0; z-index:100; background:rgba(6,7,9,.66); backdrop-filter:blur(4px); display:none; align-items:flex-end; justify-content:center}
+.scrim.open{display:flex; animation:fade .2s}
+@media(min-width:560px){.scrim{align-items:center}}
+.modal{width:100%; max-width:540px; max-height:88dvh; background:var(--surface); border:1px solid var(--border-bright); border-radius:24px 24px 0 0; box-shadow:var(--shadow-lg); overflow-y:auto; animation:slideup .3s cubic-bezier(.2,.85,.25,1)}
+@media(min-width:560px){.modal{border-radius:24px}}
+@keyframes slideup{from{transform:translateY(28px); opacity:.5} to{transform:none; opacity:1}}
+.modal-grab{width:40px; height:4px; border-radius:3px; background:var(--border-bright); margin:10px auto 4px}
+.modal-head{padding:8px 20px 16px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; position:sticky; top:0; background:var(--surface); z-index:2}
+.modal-head h2{font-size:21px; font-weight:800; letter-spacing:-.03em}
+.modal-head p{font-size:12px; font-weight:500; color:var(--text-muted); margin-top:3px}
+.modal-close{width:36px; height:36px; border-radius:11px; background:var(--surface-2); border:1px solid var(--border-soft); display:grid; place-items:center; flex:none}
+.modal-close svg{width:15px; height:15px; stroke:var(--text-dim); stroke-width:1.8; stroke-linecap:round}
+.modal-body{padding:0 20px 26px}
+
+.detail-img{border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); margin-bottom:15px; background:#08090a}
+.detail-img img{display:block; width:100%; max-height:50dvh; object-fit:contain; cursor:zoom-in}
+.detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px}
+.dd{background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius); padding:11px 13px}
+.dd .ddl{font-size:10.5px; font-weight:600; color:var(--text-muted); letter-spacing:.03em; text-transform:uppercase; margin-bottom:4px}
+.dd .ddv{font-size:14.5px; font-weight:700; letter-spacing:-.01em}
+.dd .ddv.mono{font-variant-numeric:tabular-nums}
+.detail-sec{margin-bottom:15px}
+.detail-sec h4{font-size:11px; font-weight:700; color:var(--text-dim); letter-spacing:.04em; text-transform:uppercase; margin-bottom:9px}
+.detail-notes{font-size:13.5px; line-height:1.65; color:var(--text); background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--radius); padding:13px 14px; white-space:pre-wrap}
+.detail-actions{display:flex; gap:11px; margin-top:6px}
+.da-btn{flex:1; min-height:48px; border-radius:var(--radius); font-size:14px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--border-bright); color:var(--text-dim); background:var(--surface-2); transition:all .15s}
+.da-btn:active{transform:scale(.98)}
+.da-btn.del{color:var(--red); border-color:var(--red-dim)} .da-btn.del:active{background:var(--red-glow)}
+.da-btn svg{width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:1.8}
+
+textarea.io{min-height:160px; font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12px; line-height:1.5}
+
+/* lightbox */
+.lightbox{position:fixed; inset:0; z-index:200; background:rgba(5,6,7,.95); display:none; align-items:center; justify-content:center; padding:20px}
+.lightbox.open{display:flex; animation:fade .2s}
+.lightbox img{max-width:100%; max-height:100%; object-fit:contain; border-radius:10px}
+.lightbox-x{position:absolute; top:calc(var(--safe-t) + 16px); right:18px; width:42px; height:42px; border-radius:12px; background:rgba(35,39,45,.8); border:1px solid var(--border-bright); display:grid; place-items:center}
+.lightbox-x svg{width:18px; height:18px; stroke:#fff; stroke-width:1.9; stroke-linecap:round}
+
+/* toast */
+.toast{position:fixed; left:50%; bottom:calc(var(--safe-b) + 150px); transform:translateX(-50%) translateY(12px); z-index:300; background:var(--surface-3); border:1px solid var(--accent-dim); color:var(--text); padding:12px 18px; border-radius:var(--pill); font-size:13.5px; font-weight:600; box-shadow:var(--shadow-lg); opacity:0; pointer-events:none; transition:all .25s; max-width:90vw; text-align:center}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--red-dim)}
+
+/* misc */
+.io-actions{display:flex; gap:11px; margin-top:13px}
+.tiny{font-size:11px; font-weight:500; color:var(--text-muted); margin-top:12px; line-height:1.55; text-align:center}
+.kbd{font-size:11px; font-weight:600; background:var(--surface-2); border:1px solid var(--border-soft); padding:1px 6px; border-radius:5px; color:var(--text-dim)}
+.menu-row{display:flex; gap:11px; margin-bottom:13px}
+.menu-row .da-btn{background:var(--bg-soft)}
+@media(max-width:380px){.grid2{grid-template-columns:1fr} .conf{grid-template-columns:1fr} .donut-wrap{flex-direction:column; align-items:stretch} .donut{width:130px; margin:0 auto}}
+
+</style>
+</head>
+<body class="on-log">
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>Tape<em>.</em></h1>
+      <span class="tag">on the record</span>
+    </div>
+    <button class="hdr-btn" id="open-data-hdr" aria-label="Backup and data"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg></button>
+  </header>
+
+  <main>
+    <!-- ============ LOG ============ -->
+    <section class="view active" id="view-log">
+
+      <!-- 1 Capture -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-num">1</div>
+          <div class="section-title">Capture<small>the chart and the basics</small></div>
+        </div>
+        <div class="section-body">
+          <div class="field span2">
+            <label class="lbl">Screenshot / photo</label>
+            <div class="photo-zone" id="photo-zone">
+              <input type="file" id="file-cam" accept="image/*" capture="environment" hidden>
+              <input type="file" id="file-up" accept="image/*" hidden>
+              <div id="photo-empty">
+                <div class="photo-actions">
+                  <button class="pa-btn" id="btn-cam"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Take photo</button>
+                  <button class="pa-btn" id="btn-up"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>
+                </div>
+                <div class="photo-hint"><b>Drop</b> an image, or <b>paste</b> a screenshot <span class="kbd">⌘V</span> · auto-compressed</div>
+              </div>
+              <div class="photo-preview" id="photo-preview" style="display:none">
+                <img id="photo-img" alt="trade screenshot">
+                <button class="photo-x" id="photo-x" aria-label="Remove image"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <div class="grid2" style="margin-top:14px">
+            <div class="field"><label class="lbl">Date <span class="req">*</span></label><input type="date" id="f-date"></div>
+            <div class="field"><label class="lbl">Time (ET, optional)</label><input type="time" id="f-time"></div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Direction <span class="req">*</span></label>
+            <div class="chips" id="dir-chips">
+              <div class="chip" data-dir="long"><span class="dot"></span>Long</div>
+              <div class="chip" data-dir="short"><span class="dot"></span>Short</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 Trade idea -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-num">2</div>
+          <div class="section-title">Trade idea<small>the confluences &amp; why you took it</small></div>
+        </div>
+        <div class="section-body">
+          <div class="field span2">
+            <label class="lbl">Included FVG</label>
+            <div class="chips" id="fvg-chips">
+              <div class="chip" data-fvg="yes">Yes</div>
+              <div class="chip" data-fvg="no">No</div>
+            </div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Confluence</label>
+            <div class="conf" id="conf-grid">
+              <div class="conf-item" data-conf="rb">
+                <div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="conf-name">Rejection Block</span>
+                <select class="tf" id="rb-tf" aria-label="Rejection block timeframe">
+                  <option value="1m">1m</option><option value="2m">2m</option><option value="3m">3m</option>
+                  <option value="5m" selected>5m</option><option value="15m">15m</option><option value="30m">30m</option>
+                </select>
+              </div>
+              <div class="conf-item" data-conf="midnight"><div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="conf-name">Midnight</span></div>
+              <div class="conf-item" data-conf="nyse"><div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="conf-name">9:30</span></div>
+              <div class="conf-item" data-conf="ten"><div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="conf-name">10am</span></div>
+              <div class="conf-item" data-conf="pde"><div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="conf-name">PDE</span></div>
+              <div class="conf-item" data-conf="ndog"><div class="conf-check"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5 L4 8 L9 2" stroke="#16181a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="conf-name">NDOG</span></div>
+            </div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Session bias</label>
+            <div class="chips" id="bias-chips">
+              <div class="chip" data-bias="with">With bias (DOL)</div>
+              <div class="chip" data-bias="counter">Counter-bias</div>
+            </div>
+            <div class="hint-txt">Counter-bias is a flag — only valid with a specific microstructure reason.</div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Stop loss — fib</label>
+            <div class="chips" id="stop79-chips">
+              <div class="chip" data-stop79="below">Below 0.79</div>
+              <div class="chip" data-stop79="above">Above 0.79</div>
+            </div>
+            <div class="hint-txt">Is the stop beyond the 79% retracement? Point size is optional.</div>
+            <div class="num-wrap" style="margin-top:11px">
+              <input type="number" id="f-sl" placeholder="size in points (optional)" step="0.25" min="0" inputmode="decimal">
+              <div class="steppers">
+                <button class="stepper" data-target="f-sl" data-step="0.25" aria-label="Increase stop"><svg viewBox="0 0 10 10"><path d="M2 6 L5 3 L8 6"/></svg></button>
+                <button class="stepper" data-target="f-sl" data-step="-0.25" aria-label="Decrease stop"><svg viewBox="0 0 10 10"><path d="M2 4 L5 7 L8 4"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Why this trade?</label>
+            <textarea id="f-idea" placeholder="What are the confluences, and why did you take the trade? The thesis going in."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Trade result -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-num">3</div>
+          <div class="section-title">Trade result<small>what happened &amp; why</small></div>
+        </div>
+        <div class="section-body">
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Result (RR)</label>
+              <div class="num-wrap">
+                <input type="number" id="f-r" placeholder="3, -1, 2.5" step="0.25" inputmode="decimal">
+                <div class="steppers">
+                  <button class="stepper" data-target="f-r" data-step="0.25" aria-label="Increase RR"><svg viewBox="0 0 10 10"><path d="M2 6 L5 3 L8 6"/></svg></button>
+                  <button class="stepper" data-target="f-r" data-step="-0.25" aria-label="Decrease RR"><svg viewBox="0 0 10 10"><path d="M2 4 L5 7 L8 4"/></svg></button>
+                </div>
+              </div>
+              <div class="r-prev"><span class="r-prev-l">Realized R:R · full stop = −1</span><span class="r-prev-v" id="r-prev">—</span></div>
+            </div>
+            <div class="field">
+              <label class="lbl">Target (TP)</label>
+              <input type="text" id="f-tp" placeholder="opposing RB, 10am, far FVG">
+            </div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">Exit reason</label>
+            <div class="tags" id="exit-tags">
+              <button class="t good" data-exit="target">Hit target</button>
+              <button class="t" data-exit="stopped">Stopped out</button>
+              <button class="t good" data-exit="plan">Manual — to plan</button>
+              <button class="t bad" data-exit="fear">Manual — fear</button>
+              <button class="t bad" data-exit="greed">Manual — greed</button>
+              <button class="t" data-exit="time">Time stop (11am)</button>
+            </div>
+          </div>
+          <div class="field span2">
+            <label class="lbl">How did it play out?</label>
+            <textarea id="f-result" placeholder="How did the trade play out — and why did it play out that way?"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Mind -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-num">4</div>
+          <div class="section-title">Mind<small>how you executed &amp; how you felt</small></div>
+        </div>
+        <div class="section-body">
+          <div class="field span2">
+            <label class="lbl">Process grade</label>
+            <div class="grade" id="grade-row">
+              <button class="grade-btn" data-grade="A"><span class="g">A</span><span class="gd">Textbook</span></button>
+              <button class="grade-btn" data-grade="B"><span class="g">B</span><span class="gd">Solid</span></button>
+              <button class="grade-btn" data-grade="C"><span class="g">C</span><span class="gd">Loose</span></button>
+              <button class="grade-btn" data-grade="D"><span class="g">D</span><span class="gd">Broke rules</span></button>
+            </div>
+            <div class="hint-txt">Grade the <b>execution</b>, not the P&amp;L. A loss can be an A. A win can be a D.</div>
+          </div>
+
+          <div class="field span2">
+            <label class="lbl">During &amp; after</label>
+            <textarea id="f-feel" placeholder="How did you feel during the trade? And how did you feel after — did that feeling carry into the next decision?"></textarea>
+          </div>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+    </section>
+
+    <!-- ============ JOURNAL ============ -->
+    <section class="view" id="view-journal">
+      <div class="j-filters" id="j-filters">
+        <button class="fbtn on" data-filter="all">All</button>
+        <button class="fbtn" data-filter="win">Wins</button>
+        <button class="fbtn" data-filter="loss">Losses</button>
+        <button class="fbtn" data-filter="A">A grade</button>
+        <button class="fbtn" data-filter="counter">Counter-bias</button>
+      </div>
+      <div id="entries"></div>
+    </section>
+
+    <!-- ============ INSIGHTS ============ -->
+    <section class="view" id="view-insights">
+      <div id="insights-body"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Save bar (log only) -->
+<div class="savebar" id="savebar">
+  <button class="btn ghost" id="btn-clear">Clear</button>
+  <button class="btn primary" id="btn-save">Log trade</button>
+</div>
+
+<!-- Bottom nav -->
+<nav class="nav">
+  <button class="nav-btn on" data-view="log"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Log</span></button>
+  <button class="nav-btn" data-view="journal"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Journal</span></button>
+  <button class="nav-btn" data-view="insights"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 16v-5M13 16V8M18 16v-9"/></svg><span>Insights</span></button>
+</nav>
+
+<!-- Detail / edit modal -->
+<div class="scrim" id="detail-scrim">
+  <div class="modal" id="detail-modal" role="dialog" aria-modal="true">
+    <div class="modal-grab"></div>
+    <div class="modal-head">
+      <div><h2 id="detail-title">Trade</h2><p id="detail-when"></p></div>
+      <button class="modal-close" id="detail-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- Data / settings modal -->
+<div class="scrim" id="data-scrim">
+  <div class="modal" id="data-modal" role="dialog" aria-modal="true">
+    <div class="modal-grab"></div>
+    <div class="modal-head">
+      <div><h2>Data</h2><p>Backup &amp; restore — your trades never leave this device</p></div>
+      <button class="modal-close" id="data-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="menu-row">
+        <button class="da-btn" id="btn-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export JSON</button>
+        <button class="da-btn" id="btn-import-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import JSON</button>
+      </div>
+      <div id="import-box" style="display:none">
+        <label class="lbl">Paste a Tape backup (JSON). This replaces all current trades.</label>
+        <textarea class="io" id="import-text" placeholder='{"app":"tape","trades":[...]}' spellcheck="false"></textarea>
+        <div class="io-actions">
+          <button class="da-btn" id="btn-import-cancel">Cancel</button>
+          <button class="da-btn" id="btn-import-do" style="color:var(--accent);border-color:var(--accent-dim)">Replace &amp; import</button>
+        </div>
+      </div>
+      <p class="tiny">Export includes your screenshots, so it's a full backup. Keep a copy before clearing your browser. <span id="storage-note"></span></p>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox"><button class="lightbox-x" id="lightbox-x" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg></button><img id="lightbox-img" alt="full screenshot"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   TAPE — ES trading journal + psychology
+   Single file. Storage auto-detects:
+     • Claude.ai artifact  -> window.storage
+     • Deployed (GH Pages) -> IndexedDB
+   ============================================================ */
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* ---------- Storage adapter ---------- */
+const HAS_CLAUDE = typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+const DB = (() => {
+  if (HAS_CLAUDE) {
+    return {
+      kind: 'claude',
+      async get(k){ try{ const r = await window.storage.get(k); return r ? r.value : null; }catch(e){ return null; } },
+      async set(k,v){ return window.storage.set(k, v); },
+      async del(k){ try{ return await window.storage.delete(k); }catch(e){} },
+      async keys(prefix){ try{ const r = await window.storage.list(prefix); return (r&&r.keys)||[]; }catch(e){ return []; } }
+    };
+  }
+  // IndexedDB fallback for deployed standalone use
+  const DBNAME='tape-db', STORE='kv';
+  let _db=null;
+  function open(){ return new Promise((res,rej)=>{ if(_db) return res(_db);
+    const rq=indexedDB.open(DBNAME,1);
+    rq.onupgradeneeded=()=>{ rq.result.createObjectStore(STORE); };
+    rq.onsuccess=()=>{ _db=rq.result; res(_db); }; rq.onerror=()=>rej(rq.error); }); }
+  function tx(mode){ return open().then(db=>db.transaction(STORE,mode).objectStore(STORE)); }
+  return {
+    kind:'idb',
+    async get(k){ const st=await tx('readonly'); return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result??null); q.onerror=()=>r(null); }); },
+    async set(k,v){ const st=await tx('readwrite'); return new Promise(r=>{ const q=st.put(v,k); q.onsuccess=()=>r(true); q.onerror=()=>r(false); }); },
+    async del(k){ const st=await tx('readwrite'); return new Promise(r=>{ const q=st.delete(k); q.onsuccess=()=>r(true); q.onerror=()=>r(false); }); },
+    async keys(prefix){ const st=await tx('readonly'); return new Promise(r=>{ const out=[]; const q=st.openKeyCursor(); q.onsuccess=()=>{ const c=q.result; if(c){ if(!prefix||String(c.key).startsWith(prefix)) out.push(c.key); c.continue(); } else r(out); }; q.onerror=()=>r([]); }); }
+  };
+})();
+
+const K_TRADES='tape_trades', K_SETTINGS='tape_settings', PHOTO_PREFIX='tape_photo_';
+
+/* ---------- State ---------- */
+let trades = [];
+let settings = { contract:'ES' };
+let form = freshForm();
+let editingId = null;
+
+function freshForm(){
+  return {
+    date: todayISO(), time:'', direction:null, fvg:null,
+    conf:{ rb:false,midnight:false,nyse:false,ten:false,pde:false,ndog:false }, rbTf:'5m',
+    bias:null, stop79:null, sl:null, r:null, tp:'', exit:null,
+    grade:null, idea:'', result:'', feel:'', photoFull:null, photoThumb:null
+  };
+}
+function todayISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function uid(){ return 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ---------- Labels ---------- */
+const EXIT_LABEL={target:'Hit target',stopped:'Stopped out',plan:'Manual — to plan',fear:'Manual — fear',greed:'Manual — greed',time:'Time stop'};
+const CONF_LABEL={rb:'Rejection Block',midnight:'Midnight',nyse:'9:30',ten:'10am',pde:'PDE',ndog:'NDOG'};
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg, err){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('err',!!err); t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+
+/* ---------- Formatting ---------- */
+function fmtR(v){ if(v===null||v===undefined||isNaN(v)) return '—'; const n=Number(v); return (n>0?'+':'')+n.toFixed(2).replace(/\.00$/,'')+'R'; }
+function fmtDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]; return `${mo} ${+d}`; }
+function fmtDateLong(iso){ if(!iso) return ''; const dt=new Date(iso+'T00:00:00'); return dt.toLocaleDateString(undefined,{weekday:'short',month:'long',day:'numeric',year:'numeric'}); }
+
+/* ============================================================
+   IMAGE HANDLING
+   ============================================================ */
+function compress(file, maxEdge, quality){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{ const img=new Image();
+      img.onload=()=>{ let {width:w,height:h}=img; const scale=Math.min(1,maxEdge/Math.max(w,h));
+        w=Math.round(w*scale); h=Math.round(h*scale);
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d'); ctx.fillStyle='#0d0e10'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',quality)); };
+      img.onerror=reject; img.src=reader.result; };
+    reader.onerror=reject; reader.readAsDataURL(file);
+  });
+}
+async function handleImage(file){
+  if(!file || !file.type.startsWith('image/')){ toast('Not an image',true); return; }
+  try{
+    const [full,thumb]=await Promise.all([ compress(file,1400,0.72), compress(file,150,0.5) ]);
+    form.photoFull=full; form.photoThumb=thumb;
+    $('#photo-img').src=full; $('#photo-empty').style.display='none'; $('#photo-preview').style.display='block';
+  }catch(e){ toast('Could not read image',true); }
+}
+function clearPhoto(){ form.photoFull=null; form.photoThumb=null; $('#photo-empty').style.display='block'; $('#photo-preview').style.display='none'; $('#file-cam').value=''; $('#file-up').value=''; }
+
+$('#btn-cam').addEventListener('click',()=>$('#file-cam').click());
+$('#btn-up').addEventListener('click',()=>$('#file-up').click());
+$('#file-cam').addEventListener('change',e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); });
+$('#file-up').addEventListener('change',e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); });
+$('#photo-x').addEventListener('click',clearPhoto);
+const pz=$('#photo-zone');
+['dragenter','dragover'].forEach(ev=>pz.addEventListener(ev,e=>{ e.preventDefault(); pz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=>pz.addEventListener(ev,e=>{ e.preventDefault(); pz.classList.remove('drag'); }));
+pz.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleImage(f); });
+window.addEventListener('paste',e=>{ if($('#view-log').classList.contains('active')){ const items=e.clipboardData&&e.clipboardData.items; if(!items) return; for(const it of items){ if(it.type.startsWith('image/')){ handleImage(it.getAsFile()); e.preventDefault(); break; } } }});
+
+/* ============================================================
+   FORM WIRING
+   ============================================================ */
+// date / time / text
+$('#f-date').value=form.date;
+$('#f-date').addEventListener('change',e=>form.date=e.target.value);
+$('#f-time').addEventListener('change',e=>form.time=e.target.value);
+$('#f-tp').addEventListener('input',e=>form.tp=e.target.value);
+$('#f-idea').addEventListener('input',e=>form.idea=e.target.value);
+$('#f-result').addEventListener('input',e=>form.result=e.target.value);
+$('#f-feel').addEventListener('input',e=>form.feel=e.target.value);
+
+// single-select chip groups
+function singleChips(containerSel, key, attr){
+  $$(containerSel+' .chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const v=chip.dataset[attr];
+      form[key]= form[key]===v ? null : v;
+      $$(containerSel+' .chip').forEach(c=>{ c.className='chip'; });
+      if(form[key]){ const sel=$(`${containerSel} .chip[data-${attr}="${form[key]}"]`); sel.classList.add('on', form[key]); }
+    });
+  });
+}
+singleChips('#dir-chips','direction','dir');
+singleChips('#fvg-chips','fvg','fvg');
+singleChips('#bias-chips','bias','bias');
+singleChips('#stop79-chips','stop79','stop79');
+
+// confluence multi
+$$('#conf-grid .conf-item').forEach(item=>{
+  item.addEventListener('click',e=>{
+    if(e.target.tagName==='SELECT'||e.target.tagName==='OPTION') return;
+    const k=item.dataset.conf; form.conf[k]=!form.conf[k]; item.classList.toggle('on',form.conf[k]);
+  });
+});
+$('#rb-tf').addEventListener('change',e=>form.rbTf=e.target.value);
+
+// Stop loss points (optional)
+$('#f-sl').addEventListener('input',e=>{ const v=parseFloat(e.target.value); form.sl=isNaN(v)?null:v; });
+
+// steppers
+$$('.stepper').forEach(b=>b.addEventListener('click',()=>{
+  const inp=$('#'+b.dataset.target); const step=parseFloat(b.dataset.step);
+  const cur=parseFloat(inp.value)||0; const next=Math.round((cur+step)*100)/100;
+  if(b.dataset.target==='f-sl' && next<0) return;
+  inp.value=next; inp.dispatchEvent(new Event('input'));
+}));
+
+// R field
+$('#f-r').addEventListener('input',e=>{ const v=parseFloat(e.target.value); form.r=isNaN(v)?null:v; renderRPreview(); });
+function renderRPreview(){ const el=$('#r-prev'); el.className='r-prev-v'; if(form.r===null){ el.textContent='—'; return; } el.textContent=fmtR(form.r); if(form.r>0) el.classList.add('pos'); else if(form.r<0) el.classList.add('neg'); }
+
+// exit reason single
+$$('#exit-tags .t').forEach(b=>b.addEventListener('click',()=>{
+  const v=b.dataset.exit; form.exit= form.exit===v ? null : v;
+  $$('#exit-tags .t').forEach(x=>x.classList.toggle('on', x.dataset.exit===form.exit));
+}));
+
+// grade
+$$('#grade-row .grade-btn').forEach(b=>b.addEventListener('click',()=>{
+  const v=b.dataset.grade; form.grade= form.grade===v ? null : v;
+  $$('#grade-row .grade-btn').forEach(x=>x.classList.toggle('on', x.dataset.grade===form.grade));
+}));
+
+/* ---------- Reset form UI ---------- */
+function resetFormUI(){
+  form=freshForm();
+  $('#f-date').value=form.date; $('#f-time').value=''; $('#f-tp').value=''; $('#f-sl').value=''; $('#f-r').value=''; $('#rb-tf').value='5m';
+  $('#f-idea').value=''; $('#f-result').value=''; $('#f-feel').value='';
+  $$('.chip').forEach(c=>{ c.className='chip'; });
+  $$('#conf-grid .conf-item').forEach(c=>c.classList.remove('on'));
+  $$('#exit-tags .t').forEach(c=>c.classList.remove('on'));
+  $$('#grade-row .grade-btn').forEach(c=>c.classList.remove('on'));
+  renderRPreview(); clearPhoto();
+  editingId=null; $('#btn-save').textContent='Log trade';
+}
+$('#btn-clear').addEventListener('click',()=>{ resetFormUI(); toast('Cleared'); });
+
+/* ---------- Load form for editing ---------- */
+async function loadIntoForm(t){
+  resetFormUI(); editingId=t.id; $('#btn-save').textContent='Save changes';
+  form.date=t.date; $('#f-date').value=t.date;
+  form.time=t.time||''; $('#f-time').value=t.time||'';
+  form.tp=t.tp||''; $('#f-tp').value=t.tp||'';
+  form.idea=t.idea||''; $('#f-idea').value=t.idea||'';
+  form.result=t.result||''; $('#f-result').value=t.result||'';
+  form.feel=t.feel||''; $('#f-feel').value=t.feel||'';
+  form.rbTf=t.rbTf||'5m'; $('#rb-tf').value=form.rbTf;
+  form.sl=t.sl??null; if(t.sl!=null) $('#f-sl').value=t.sl;
+  form.stop79=t.stop79||null; if(t.stop79){ const c=$(`#stop79-chips .chip[data-stop79="${t.stop79}"]`); if(c) c.classList.add('on',t.stop79); }
+  form.r=t.r??null; if(t.r!=null) $('#f-r').value=t.r; renderRPreview();
+  if(t.direction){ form.direction=t.direction; const c=$(`#dir-chips .chip[data-dir="${t.direction}"]`); if(c) c.classList.add('on',t.direction); }
+  if(t.fvg){ form.fvg=t.fvg; const c=$(`#fvg-chips .chip[data-fvg="${t.fvg}"]`); if(c) c.classList.add('on'); }
+  if(t.bias){ form.bias=t.bias; const c=$(`#bias-chips .chip[data-bias="${t.bias}"]`); if(c) c.classList.add('on',t.bias); }
+  form.conf=Object.assign({rb:false,midnight:false,nyse:false,ten:false,pde:false,ndog:false}, t.conf||{});
+  Object.keys(form.conf).forEach(k=>{ if(form.conf[k]){ const el=$(`#conf-grid .conf-item[data-conf="${k}"]`); if(el) el.classList.add('on'); } });
+  if(t.exit){ form.exit=t.exit; const c=$(`#exit-tags .t[data-exit="${t.exit}"]`); if(c) c.classList.add('on'); }
+  if(t.grade){ form.grade=t.grade; const c=$(`#grade-row .grade-btn[data-grade="${t.grade}"]`); if(c) c.classList.add('on'); }
+  form.photoThumb=t.thumb||null;
+  if(t.hasPhoto){ const full=await DB.get(PHOTO_PREFIX+t.id); if(full){ form.photoFull=full; $('#photo-img').src=full; $('#photo-empty').style.display='none'; $('#photo-preview').style.display='block'; } }
+  switchView('log'); window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ============================================================
+   SAVE / PERSIST
+   ============================================================ */
+async function saveTrades(){ await DB.set(K_TRADES, trades); }
+
+$('#btn-save').addEventListener('click', async ()=>{
+  if(!form.direction){ toast('Pick a direction first',true); return; }
+  if(!form.date){ toast('Pick a date',true); return; }
+  const btn=$('#btn-save'); btn.disabled=true;
+  const id = editingId || uid();
+  const rec = {
+    id, contract:'ES', date:form.date, time:form.time||'',
+    direction:form.direction, fvg:form.fvg, conf:{...form.conf}, rbTf:form.rbTf, bias:form.bias,
+    stop79:form.stop79, sl:form.sl, r:form.r, tp:form.tp||'', exit:form.exit, grade:form.grade,
+    idea:form.idea||'', result:form.result||'', feel:form.feel||'',
+    hasPhoto:!!form.photoFull, thumb:form.photoThumb||null,
+    createdAt: editingId ? (trades.find(t=>t.id===id)||{}).createdAt||Date.now() : Date.now(),
+    updatedAt: Date.now()
+  };
+  try{
+    if(form.photoFull){ await DB.set(PHOTO_PREFIX+id, form.photoFull); }
+    else if(editingId){ await DB.del(PHOTO_PREFIX+id); }
+    if(editingId){ const i=trades.findIndex(t=>t.id===id); if(i>=0) trades[i]=rec; }
+    else { trades.unshift(rec); }
+    await saveTrades();
+    toast(editingId?'Trade updated':'Logged ✓');
+    resetFormUI(); renderJournal(); renderInsights();
+  }catch(e){ toast('Save failed — storage may be full',true); }
+  finally{ btn.disabled=false; }
+});
+
+/* ============================================================
+   JOURNAL
+   ============================================================ */
+let jFilter='all';
+$$('#j-filters .fbtn').forEach(b=>b.addEventListener('click',()=>{
+  jFilter=b.dataset.filter; $$('#j-filters .fbtn').forEach(x=>x.classList.toggle('on',x===b)); renderJournal();
+}));
+function passFilter(t){
+  switch(jFilter){
+    case 'win': return t.r>0;
+    case 'loss': return t.r<0;
+    case 'A': return t.grade==='A';
+    case 'counter': return t.bias==='counter';
+    default: return true;
+  }
+}
+function outcomeClass(r){ if(r>0) return 'pos'; if(r<0) return 'neg'; return 'flat'; }
+function renderJournal(){
+  const wrap=$('#entries'); const list=trades.filter(passFilter);
+  if(!trades.length){ wrap.innerHTML=emptyState('No trades yet','Log your first ES trade and it’ll show up here. Every entry, on the record.'); return; }
+  if(!list.length){ wrap.innerHTML=emptyState('Nothing matches','No trades match this filter.'); return; }
+  wrap.innerHTML=list.map(t=>{
+    const r=t.r; const rc=outcomeClass(r);
+    const conf=Object.keys(t.conf||{}).filter(k=>t.conf[k]).map(k=>CONF_LABEL[k]);
+    return `<div class="entry" data-id="${t.id}">
+      <div class="entry-thumb ${t.hasPhoto?'':'empty'}" data-thumb="${t.id}">${ t.thumb ? `<img src="${t.thumb}" alt="">` : `<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>` }</div>
+      <div class="entry-body">
+        <div class="entry-top">
+          <div class="entry-meta">
+            <span class="dir-badge ${t.direction}">${t.direction==='long'?'Long':'Short'}</span>
+            <span class="entry-date">${fmtDate(t.date)}${t.time?' · '+t.time:''}</span>
+          </div>
+          <span class="entry-r ${rc}">${fmtR(r)}</span>
+        </div>
+        <div class="entry-tags">
+          ${t.grade?`<span class="gpill ${t.grade}">${t.grade}</span>`:''}
+          ${conf.slice(0,2).map(c=>`<span class="mini-tag">${c}</span>`).join('')}
+          ${(!conf.length && t.bias==='counter')?`<span class="mini-tag">Counter-bias</span>`:''}
+          ${(!conf.length && t.bias!=='counter' && t.fvg==='yes')?`<span class="mini-tag">FVG</span>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  $$('#entries .entry').forEach(el=>el.addEventListener('click',()=>openDetail(el.dataset.id)));
+}
+function emptyState(h,p){ return `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg><h3>${h}</h3><p>${p}</p></div>`; }
+
+/* ---------- Detail ---------- */
+async function openDetail(id){
+  const t=trades.find(x=>x.id===id); if(!t) return;
+  $('#detail-title').textContent=(t.direction==='long'?'Long':'Short')+' · '+(t.contract||'ES');
+  $('#detail-when').textContent=fmtDateLong(t.date)+(t.time?' · '+t.time+' ET':'');
+  const conf=Object.keys(t.conf||{}).filter(k=>t.conf[k]).map(k=> k==='rb'?`RB ${t.rbTf||''}`:CONF_LABEL[k]);
+  const stopTxt = t.stop79==='below'?'Below 0.79':t.stop79==='above'?'Above 0.79':'—';
+  const stopSub = t.sl!=null?` · ${t.sl}pt`:'';
+  const body=$('#detail-body');
+  body.innerHTML=`
+    ${t.hasPhoto?`<div class="detail-img"><img id="detail-photo" alt="trade screenshot"></div>`:''}
+    <div class="detail-grid">
+      <div class="dd"><div class="ddl">Result (RR)</div><div class="ddv mono" style="color:${t.r>0?'var(--green)':t.r<0?'var(--red)':'var(--text-muted)'}">${fmtR(t.r)}</div></div>
+      <div class="dd"><div class="ddl">Process</div><div class="ddv">${t.grade?`Grade ${t.grade}`:'—'}</div></div>
+      <div class="dd"><div class="ddl">Stop (fib)</div><div class="ddv">${stopTxt}<span style="color:var(--text-muted);font-weight:500">${stopSub}</span></div></div>
+      <div class="dd"><div class="ddl">Bias</div><div class="ddv">${t.bias==='with'?'With (DOL)':t.bias==='counter'?'Counter':'—'}</div></div>
+      <div class="dd"><div class="ddl">Included FVG</div><div class="ddv">${t.fvg==='yes'?'Yes':t.fvg==='no'?'No':'—'}</div></div>
+      <div class="dd"><div class="ddl">Target</div><div class="ddv" style="font-weight:600">${t.tp?escapeHtml(t.tp):'—'}</div></div>
+    </div>
+    ${conf.length?`<div class="detail-sec"><h4>Confluence</h4><div class="tags">${conf.map(c=>`<span class="t on" style="pointer-events:none">${c}</span>`).join('')}</div></div>`:''}
+    ${t.exit?`<div class="detail-sec"><h4>Exit</h4><div class="tags"><span class="t on" style="pointer-events:none">${EXIT_LABEL[t.exit]}</span></div></div>`:''}
+    ${t.idea?`<div class="detail-sec"><h4>Trade idea</h4><div class="detail-notes">${escapeHtml(t.idea)}</div></div>`:''}
+    ${t.result?`<div class="detail-sec"><h4>Trade result</h4><div class="detail-notes">${escapeHtml(t.result)}</div></div>`:''}
+    ${t.feel?`<div class="detail-sec"><h4>During &amp; after</h4><div class="detail-notes">${escapeHtml(t.feel)}</div></div>`:''}
+    <div class="detail-actions">
+      <button class="da-btn" id="d-edit"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button>
+      <button class="da-btn del" id="d-del"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Delete</button>
+    </div>`;
+  if(t.hasPhoto){ const full=await DB.get(PHOTO_PREFIX+id); const im=$('#detail-photo'); if(im&&full){ im.src=full; im.addEventListener('click',()=>openLightbox(full)); } }
+  $('#d-edit').addEventListener('click',()=>{ closeScrim('#detail-scrim'); loadIntoForm(t); });
+  $('#d-del').addEventListener('click',()=>confirmDelete(t.id));
+  openScrim('#detail-scrim');
+}
+function confirmDelete(id){
+  const btn=$('#d-del');
+  if(btn.dataset.confirm==='1'){ doDelete(id); return; }
+  btn.dataset.confirm='1'; btn.innerHTML=`<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Tap again to delete`;
+  setTimeout(()=>{ if(btn){ btn.dataset.confirm='0'; } },3000);
+}
+async function doDelete(id){
+  const t=trades.find(x=>x.id===id);
+  if(t&&t.hasPhoto) await DB.del(PHOTO_PREFIX+id);
+  trades=trades.filter(x=>x.id!==id); await saveTrades();
+  closeScrim('#detail-scrim'); renderJournal(); renderInsights(); toast('Deleted');
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- Lightbox ---------- */
+function openLightbox(src){ $('#lightbox-img').src=src; $('#lightbox').classList.add('open'); }
+$('#lightbox-x').addEventListener('click',()=>$('#lightbox').classList.remove('open'));
+$('#lightbox').addEventListener('click',e=>{ if(e.target.id==='lightbox') $('#lightbox').classList.remove('open'); });
+
+/* ============================================================
+   INSIGHTS
+   ============================================================ */
+function withR(){ return trades.filter(t=>t.r!=null && !isNaN(t.r)); }
+function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+
+function renderInsights(){
+  const body=$('#insights-body');
+  const all=trades, rt=withR();
+  if(all.length<1){ body.innerHTML=`<div class="ins-card">${emptyState('No data yet','Log a few trades and your edge — and your psychology — start showing up here.')}</div>`; return; }
+  const n=rt.length;
+  const wins=rt.filter(t=>t.r>0), losses=rt.filter(t=>t.r<0);
+  const wr= n? (wins.length/n*100):0;
+  const exp= mean(rt.map(t=>t.r));
+  const totalR= rt.reduce((s,t)=>s+t.r,0);
+
+  // grade distribution
+  const grades=['A','B','C','D']; const gCount=grades.map(g=>all.filter(t=>t.grade===g).length);
+  const gMax=Math.max(1,...gCount);
+  const gColor={A:'var(--green)',B:'var(--accent)',C:'var(--amber)',D:'var(--red)'};
+
+  // discipline tax: avg R good-process (A/B) vs loose (C/D)
+  const good=rt.filter(t=>t.grade==='A'||t.grade==='B');
+  const loose=rt.filter(t=>t.grade==='C'||t.grade==='D');
+  const goodR=good.length?mean(good.map(t=>t.r)):null;
+  const looseR=loose.length?mean(loose.map(t=>t.r)):null;
+
+  // equity curve (chronological)
+  const chrono=[...rt].sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||''))||a.createdAt-b.createdAt);
+  let cum=0; const eq=chrono.map(t=>{ cum+=t.r; return cum; });
+
+  body.innerHTML=`
+    <div class="stat-row">
+      <div class="stat"><div class="sv ${exp>=0?'pos':'neg'}">${n?fmtR(exp):'—'}</div><div class="sl">Expectancy · <b>avg RR / trade</b></div></div>
+      <div class="stat"><div class="sv">${n?wr.toFixed(0)+'%':'—'}</div><div class="sl">Win rate · <b>${wins.length}W / ${losses.length}L</b></div></div>
+      <div class="stat"><div class="sv ${totalR>=0?'pos':'neg'}">${n?fmtR(totalR):'—'}</div><div class="sl">Total RR · <b>${n} graded trade${n!==1?'s':''}</b></div></div>
+      <div class="stat"><div class="sv">${all.length}</div><div class="sl">Logged · <b>${all.length-n} without RR</b></div></div>
+    </div>
+
+    ${n>=2?`<div class="ins-card">
+      <div class="ins-title"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h6v6"/></svg>Equity curve</div>
+      <div class="ins-sub">Cumulative RR, in order. The shape matters more than any single trade.</div>
+      <div class="eq-wrap">${equitySVG(eq)}</div>
+    </div>`:''}
+
+    <div class="ins-card">
+      <div class="ins-title"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6 4.5 2.3 7.1L12 16.6 5.7 21l2.3-7.1-6-4.5h7.6z"/></svg>Process discipline</div>
+      <div class="ins-sub">How you graded your own execution — independent of whether it paid.</div>
+      <div class="donut-wrap">
+        <div class="donut">${donutSVG(grades.map((g,i)=>({label:g,value:gCount[i],color:gColor[g]})))}</div>
+        <div class="donut-legend">
+          ${grades.map((g,i)=>`<div class="leg-row"><span class="leg-dot" style="background:${gColor[g]}"></span><span class="leg-name">Grade ${g} <small>· ${({A:'Textbook',B:'Solid',C:'Loose',D:'Broke rules'})[g]}</small></span><span class="leg-val">${gCount[i]}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${(goodR!==null&&looseR!==null)?`<div class="ins-card">
+      <div class="ins-title"><svg viewBox="0 0 24 24"><path d="M12 1v22M5 8h9a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h11"/></svg>Discipline tax</div>
+      <div class="ins-sub">What loose execution actually costs you, in RR.</div>
+      <div class="tax">
+        <div class="tax-cell"><div class="tcv" style="color:var(--green)">${fmtR(goodR)}</div><div class="tcl">A / B process (${good.length})</div></div>
+        <div class="tax-cell"><div class="tcv" style="color:var(--red)">${fmtR(looseR)}</div><div class="tcl">C / D process (${loose.length})</div></div>
+        <div class="tax-cell"><div class="tcv" style="color:${(goodR-looseR)>=0?'var(--amber)':'var(--text-muted)'}">${fmtR(goodR-looseR)}</div><div class="tcl">gap / trade</div></div>
+      </div>
+    </div>`:''}
+
+    <div class="ai-card">
+      <div class="ai-head"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.1 2.5 5.3.8.8 1.5 1.7 1.5 2.7v1h6v-1c0-1 .7-1.9 1.5-2.7C17.8 13.1 19 11.4 19 9a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg><h3>Analyze my mind</h3></div>
+      <p class="ai-desc">Runs your recent trades — confluences, results, grades and how you felt — through Claude for a read on your patterns, blind spots, and one concrete focus for next session. Stays private to this analysis.</p>
+      <button class="ai-btn" id="ai-run"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Analyze ${Math.min(all.length,30)} recent trade${Math.min(all.length,30)!==1?'s':''}</button>
+      <div class="ai-out" id="ai-out"></div>
+    </div>
+
+    <div style="text-align:center;margin:6px 0 4px">
+      <button class="fbtn" id="open-data" style="min-height:38px;padding:0 16px">Backup &amp; data</button>
+    </div>
+  `;
+  const aiBtn=$('#ai-run'); if(aiBtn) aiBtn.addEventListener('click',runAI);
+  const od=$('#open-data'); if(od) od.addEventListener('click',()=>openScrim('#data-scrim'));
+}
+
+function equitySVG(eq){
+  const W=560,H=150,pad=8;
+  if(!eq.length) return '';
+  const pts=[0,...eq]; const min=Math.min(0,...pts), max=Math.max(0,...pts);
+  const range=(max-min)||1;
+  const x=i=>pad+(i/(pts.length-1||1))*(W-2*pad);
+  const y=v=>H-pad-((v-min)/range)*(H-2*pad);
+  const line=pts.map((v,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const area=`${line} L${x(pts.length-1).toFixed(1)} ${y(min).toFixed(1)} L${x(0).toFixed(1)} ${y(min).toFixed(1)} Z`;
+  const zeroY=y(0); const last=eq[eq.length-1]; const up=last>=0;
+  const col=up?'var(--green)':'var(--red)';
+  return `<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Equity curve, ending at ${fmtR(last)}">
+    <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.28"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="${pad}" y1="${zeroY.toFixed(1)}" x2="${W-pad}" y2="${zeroY.toFixed(1)}" stroke="var(--border-bright)" stroke-width="1" stroke-dasharray="2 5"/>
+    <path d="${area}" fill="url(#eqg)"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(pts.length-1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3.4" fill="${col}"/>
+  </svg>`;
+}
+
+function donutSVG(segs){
+  const total=segs.reduce((s,x)=>s+x.value,0);
+  const cx=70, cy=70, R=54, sw=13, C=2*Math.PI*R;
+  const track=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--bg-soft)" stroke-width="${sw}"/>`;
+  let arcs='';
+  if(total>0){
+    const active=segs.filter(s=>s.value>0);
+    const gap = active.length>1 ? 16 : 0;
+    let off=0;
+    arcs=active.map(s=>{
+      const len=(s.value/total)*C;
+      const draw=Math.max(0.001, len-gap);
+      const el=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${draw.toFixed(2)} ${(C-draw).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      off+=len; return el;
+    }).join('');
+  }
+  return `<svg viewBox="0 0 140 140" role="img" aria-label="Process grade mix, ${total} graded trades">
+    ${track}${arcs}
+    <text x="70" y="67" text-anchor="middle" dominant-baseline="central" class="donut-mid-num">${total}</text>
+    <text x="70" y="88" text-anchor="middle" class="donut-mid-lbl">GRADED</text>
+  </svg>`;
+}
+
+/* ============================================================
+   AI ANALYSIS (Claude-in-Claude; graceful fallback)
+   ============================================================ */
+async function runAI(){
+  const btn=$('#ai-run'), out=$('#ai-out');
+  const rt=withR(); 
+  if(rt.length<3){ out.classList.add('show'); out.innerHTML='Log at least <strong>3 trades with a result</strong> first — there’s not enough to read a pattern yet.'; return; }
+  const recent=[...trades].slice(0,30).map(t=>({
+    date:t.date, dir:t.direction, RR:t.r, grade:t.grade, bias:t.bias, includedFVG:t.fvg,
+    confluence:Object.keys(t.conf||{}).filter(k=>t.conf[k]),
+    stopVs079:t.stop79, exit:t.exit,
+    idea:(t.idea||'').slice(0,300), result:(t.result||'').slice(0,300), feeling:(t.feel||'').slice(0,300)
+  }));
+  const expR=mean(rt.map(t=>t.r)).toFixed(2);
+  const wr=(rt.filter(t=>t.r>0).length/rt.length*100).toFixed(0);
+  btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span>Reading the tape…';
+  out.classList.remove('show');
+
+  const sys=`You are a sharp, no-nonsense trading-psychology coach for a futures day trader running an ICT / Smart-Money-Concepts model on ES (rejection-block entries out of FVGs, aligned with session bias/DOL, fib-based stops around the 0.79 retracement, exits at the opposing rejection block, hard 11:00 AM ET cutoff). You are reviewing their journal. Each trade has: a result in RR, a self-assigned process grade (A–D, graded on execution not P&L), and three written reflections — the trade idea (why they took it), the result (how it played out and why), and how they felt during and after. Be direct, specific and warm — like a coach who respects them. Ground every observation in the data given, especially their own words. Rules:
+- Lead with the single most important pattern you see (psychological, not strategic).
+- Call out any gap between process grade and RR (winning on bad process, or good process getting unlucky).
+- Read their written reflections for recurring emotional tells — hesitation, FOMO, revenge, over-confidence, letting a result bleed into the next decision.
+- Tie how they felt to how they executed and what it returned, where the data supports it.
+- End with ONE concrete, behavioural focus for the next session — something they can actually do, not a platitude.
+- ~180 words max. No preamble, no headers, no markdown symbols. Plain short paragraphs. Use **double asterisks** only around 2-4 key phrases for emphasis.`;
+  const user=`Stats: ${rt.length} trades with a result, expectancy ${expR}RR, win rate ${wr}%.\nMost recent trades (newest first):\n${JSON.stringify(recent)}`;
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, system:sys, messages:[{role:"user",content:user}] })
+    });
+    if(!res.ok) throw new Error('status '+res.status);
+    const data=await res.json();
+    const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+    if(!text) throw new Error('empty');
+    out.innerHTML=text.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    out.classList.add('show');
+  }catch(e){
+    out.classList.add('show');
+    out.innerHTML = HAS_CLAUDE
+      ? `Couldn’t reach the analysis service just now (<strong>${escapeHtml(String(e.message||e))}</strong>). Give it another go in a moment.`
+      : `AI analysis runs inside Claude.ai for free. On your deployed copy it needs your own Anthropic API key wired into the <span class="kbd">fetch</span> call — everything else here works offline. Want me to add a settings field for your key when we ship the standalone version?`;
+  }finally{ btn.disabled=false; btn.innerHTML=orig; }
+}
+
+/* ============================================================
+   DATA: export / import
+   ============================================================ */
+$('#btn-export').addEventListener('click', async ()=>{
+  const full=[]; for(const t of trades){ const rec={...t}; if(t.hasPhoto){ rec._photo=await DB.get(PHOTO_PREFIX+t.id); } full.push(rec); }
+  const payload={ app:'tape', version:1, exportedAt:new Date().toISOString(), settings, trades:full };
+  const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`tape-backup-${todayISO()}.json`; a.click(); URL.revokeObjectURL(url);
+  toast('Backup downloaded');
+});
+$('#btn-import-open').addEventListener('click',()=>{ $('#import-box').style.display='block'; });
+$('#btn-import-cancel').addEventListener('click',()=>{ $('#import-box').style.display='none'; $('#import-text').value=''; });
+$('#btn-import-do').addEventListener('click', async ()=>{
+  let data; try{ data=JSON.parse($('#import-text').value); }catch(e){ toast('Invalid JSON',true); return; }
+  const arr=Array.isArray(data)?data:data.trades; if(!Array.isArray(arr)){ toast('No trades found in file',true); return; }
+  try{
+    // clear old photos
+    const oldKeys=await DB.keys(PHOTO_PREFIX); for(const k of oldKeys) await DB.del(k);
+    const clean=[];
+    for(const raw of arr){ const t={...raw}; const photo=t._photo; delete t._photo; if(!t.id) t.id=uid();
+      t.hasPhoto=!!photo; if(photo){ await DB.set(PHOTO_PREFIX+t.id, photo); } clean.push(t); }
+    trades=clean; if(data.settings) settings=Object.assign(settings,data.settings);
+    await saveTrades(); await DB.set(K_SETTINGS,settings);
+    $('#import-box').style.display='none'; $('#import-text').value='';
+    closeScrim('#data-scrim'); renderJournal(); renderInsights(); toast(`Imported ${clean.length} trades`);
+  }catch(e){ toast('Import failed',true); }
+});
+
+/* ============================================================
+   NAV / VIEWS / MODALS
+   ============================================================ */
+function switchView(v){
+  $$('.view').forEach(s=>s.classList.toggle('active', s.id==='view-'+v));
+  $$('.nav-btn').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  $('#savebar').style.display = v==='log' ? 'flex' : 'none';
+  document.body.classList.toggle('on-log', v==='log');
+  if(v==='journal') renderJournal();
+  if(v==='insights') renderInsights();
+  window.scrollTo({top:0});
+}
+$$('.nav-btn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+
+function openScrim(sel){ $(sel).classList.add('open'); document.body.style.overflow='hidden'; }
+function closeScrim(sel){ $(sel).classList.remove('open'); document.body.style.overflow=''; const db=$('#d-del'); }
+$('#detail-close').addEventListener('click',()=>closeScrim('#detail-scrim'));
+$('#data-close').addEventListener('click',()=>closeScrim('#data-scrim'));
+[['#detail-scrim'],['#data-scrim']].forEach(([s])=>$(s).addEventListener('click',e=>{ if(e.target.id===s.slice(1)) closeScrim(s); }));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeScrim('#detail-scrim'); closeScrim('#data-scrim'); $('#lightbox').classList.remove('open'); } });
+
+/* header data button */
+$('#open-data-hdr').addEventListener('click',()=>openScrim('#data-scrim'));
+
+/* ============================================================
+   INIT
+   ============================================================ */
+async function init(){
+  try{
+    const st=await DB.get(K_SETTINGS); if(st) settings=Object.assign(settings,st);
+    const tr=await DB.get(K_TRADES); if(Array.isArray(tr)) trades=tr;
+  }catch(e){}
+  // migrate / sanity
+  trades.forEach(t=>{ if(!t.conf) t.conf={}; });
+  $('#storage-note').textContent = HAS_CLAUDE ? 'Stored in this Claude workspace.' : 'Stored locally in your browser.';
+  renderRPreview(); renderJournal(); renderInsights();
+}
+init();
+
+/* ---------- PWA: service worker + persistent storage (no-ops inside Claude.ai) ---------- */
+if(!HAS_CLAUDE){
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+  if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+}
+</script>
+</body>
+</html>
