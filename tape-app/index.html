@@ -92,7 +92,7 @@ const state = {
   detailId:null, detailPhoto:null, deleteArmed:false,
   dataOpen:false, importOpen:false, importText:'',
   lightboxSrc:null, insScope:'all', jFilter:'all', toast:null,
-  adding:{conf:false,stop:false}, addVal:{conf:'',stop:''},
+  adding:{conf:false,stop:false,tp:false}, addVal:{conf:'',stop:'',tp:''},
   manageVal:{confluences:'',stops:'',targets:''}
 };
 let _toastT=null, _dayT=null, _delT=null, _idb=null;
@@ -102,12 +102,13 @@ function todayISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezo
 function nowTime(){ return new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 function uid(){ return 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function slug(s){ return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || ('c'+Date.now().toString(36)); }
-function freshSheet(){ return { mode:'live', date:todayISO(), time:nowTime(), direction:null, conf:{}, sl:null, target:null, r:null, exit:null, grade:null, note:'', photoFull:null, photoThumb:null }; }
+function freshSheet(){ return { mode:'live', date:todayISO(), time:nowTime(), direction:null, conf:{}, sl:null, target:null, tp:null, r:null, exit:null, grade:null, note:'', photoFull:null, photoThumb:null }; }
 
 /* ---------- defaults / lists ---------- */
 const DEFAULT_CONF=[{id:'rb',label:'Rejection Block'},{id:'midnight',label:'Midnight Open'},{id:'nyse',label:'9:30'},{id:'ten',label:'10:00'},{id:'pde',label:'PDE'},{id:'ndog',label:'NDOG'}];
 const DEFAULT_TARGETS=[{id:'liquidity',label:'Liquidity (DOL)'},{id:'opp-fvg',label:'Opposing FVG'},{id:'opp-rb',label:'Opposing RB'},{id:'pd-array',label:'PD Array'},{id:'pdh-pdl',label:'PDH / PDL'}];
 const DEFAULT_STOPS=[{id:'wick',label:'Wick Extreme'},{id:'body',label:'Body'},{id:'79',label:'.79'}];
+const DEFAULT_TPS=[{id:'furthest-fvg',label:'Furthest FVG'},{id:'930',label:'9:30'},{id:'1000',label:'10:00'}];
 const LEGACY_CONF={rb:'Rejection Block',midnight:'Midnight',nyse:'9:30',ten:'10am',pde:'PDE',ndog:'NDOG'};
 const EXIT_OPTS=[{id:'target',label:'Hit target'},{id:'stopped',label:'Stopped out'},{id:'plan',label:'Manual — to plan'},{id:'fear',label:'Manual — fear'},{id:'greed',label:'Manual — greed'},{id:'time',label:'Time stop'}];
 function ensureLists(s){
@@ -115,16 +116,19 @@ function ensureLists(s){
   if(!Array.isArray(s.confluences)||!s.confluences.length) s.confluences=DEFAULT_CONF.map(c=>({...c}));
   if(!Array.isArray(s.targets)||!s.targets.length) s.targets=DEFAULT_TARGETS.map(c=>({...c}));
   if(!Array.isArray(s.stops)||!s.stops.length) s.stops=DEFAULT_STOPS.map(c=>({...c}));
-  s.confLabels=s.confLabels||{}; s.targetLabels=s.targetLabels||{}; s.stopLabels=s.stopLabels||{};
+  if(!Array.isArray(s.tps)||!s.tps.length) s.tps=DEFAULT_TPS.map(c=>({...c}));
+  s.confLabels=s.confLabels||{}; s.targetLabels=s.targetLabels||{}; s.stopLabels=s.stopLabels||{}; s.tpLabels=s.tpLabels||{};
   [...DEFAULT_CONF,...s.confluences].forEach(c=>{ if(!s.confLabels[c.id]) s.confLabels[c.id]=c.label; });
   Object.entries(LEGACY_CONF).forEach(([id,l])=>{ if(!s.confLabels[id]) s.confLabels[id]=l; });
   [...DEFAULT_TARGETS,...s.targets].forEach(c=>{ if(!s.targetLabels[c.id]) s.targetLabels[c.id]=c.label; });
   [...DEFAULT_STOPS,...s.stops].forEach(c=>{ if(!s.stopLabels[c.id]) s.stopLabels[c.id]=c.label; });
+  [...DEFAULT_TPS,...s.tps].forEach(c=>{ if(!s.tpLabels[c.id]) s.tpLabels[c.id]=c.label; });
   return s;
 }
 function confLabel(id){ return (state.settings.confLabels&&state.settings.confLabels[id]) || LEGACY_CONF[id] || id; }
 function targetLabel(id){ return (state.settings.targetLabels&&state.settings.targetLabels[id]) || id; }
 function stopLabel(id){ return (state.settings.stopLabels&&state.settings.stopLabels[id]) || id; }
+function tpLabel(id){ return (state.settings.tpLabels&&state.settings.tpLabels[id]) || id; }
 
 /* ---------- storage ---------- */
 const HAS_CLAUDE = typeof window!=='undefined' && window.storage && typeof window.storage.get==='function';
@@ -163,6 +167,7 @@ function chip(on,col,ink){ return on
   : `display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:999px; border:1px solid transparent; background:${C.raised}; color:${C.dim2}; font:600 13px 'Hanken Grotesk';`; }
 function bigChip(on,col,ink){ return `flex:1; text-align:center; padding:13px 0; border-radius:13px; border:1px solid ${on?col:'transparent'}; background:${on?col:C.raised}; color:${on?(ink||C.periInk):C.dim2}; font:700 14px 'Hanken Grotesk'; transition:all .12s;`; }
 function seg(on,col,ink){ return `flex:1; text-align:center; padding:10px 0; border-radius:9px; border:none; background:${on?col:C.raised}; color:${on?(ink||C.periInk):C.dim}; font:700 12.5px 'Hanken Grotesk'; transition:all .12s;`; }
+function modeBtn(on,col,ink){ return `padding:7px 15px; border-radius:7px; border:none; background:${on?col:'transparent'}; color:${on?(ink||C.periInk):C.dim}; font:700 13px 'Hanken Grotesk'; white-space:nowrap; transition:all .12s;`; }
 function navStyle(on){ return `display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border-radius:999px; border:none; transition:all .15s; color:${on?C.periInk:C.dim}; background:${on?C.peri:'transparent'}; font:700 13px 'Hanken Grotesk';`; }
 
 /* ---------- trade card VM ---------- */
@@ -197,7 +202,7 @@ async function saveTrade(){
   const id=state.editingId||uid();
   const prev=state.editingId?state.trades.find(t=>t.id===id):null;
   const rec={ id, mode:f.mode||'live', date:f.date||todayISO(), time:f.time||'', direction:f.direction,
-    conf:Object.fromEntries(Object.entries(f.conf||{}).filter(([k,v])=>v)), sl:f.sl||null, target:f.target||null,
+    conf:Object.fromEntries(Object.entries(f.conf||{}).filter(([k,v])=>v)), sl:f.sl||null, target:f.target||null, tp:f.tp||null,
     r:(f.r===''||f.r===null||f.r===undefined||isNaN(f.r))?null:Number(f.r), exit:f.exit||null, grade:f.grade||null, note:f.note||'',
     hasPhoto:!!f.photoFull, thumb:f.photoThumb||null, createdAt: prev?prev.createdAt:Date.now(), updatedAt:Date.now() };
   try{
@@ -218,14 +223,14 @@ function shiftDay(delta){ const d=new Date(state.today+'T00:00:00'); d.setDate(d
 /* detail */
 async function openDetail(id){ const t=state.trades.find(x=>x.id===id); if(!t) return; state.detailId=id; state.detailPhoto=null; state.deleteArmed=false; renderDetail(); if(t.hasPhoto){ const full=await dbGet('tape_photo_'+id); if(full){ state.detailPhoto=full; if(state.detailId===id) renderDetail(); } } }
 function closeDetail(){ state.detailId=null; state.deleteArmed=false; renderDetail(); }
-async function editDetail(){ const t=state.trades.find(x=>x.id===state.detailId); if(!t) return; const sheet={ mode:t.mode||'live', date:t.date, time:t.time||'', direction:t.direction||null, conf:{...(t.conf||{})}, sl:t.sl||null, target:t.target||null, r:(t.r==null?null:t.r), exit:t.exit||null, grade:t.grade||null, note:t.note||t.result||'', photoFull:null, photoThumb:t.thumb||null }; if(t.hasPhoto){ const full=await dbGet('tape_photo_'+t.id); if(full) sheet.photoFull=full; } state.detailId=null; state.sheetOpen=true; state.editingId=t.id; state.moreOpen=!!(t.target||t.exit||t.note||t.result); state.sheet=sheet; state.adding={conf:false,stop:false}; state.addVal={conf:'',stop:''}; render(); }
+async function editDetail(){ const t=state.trades.find(x=>x.id===state.detailId); if(!t) return; const sheet={ mode:t.mode||'live', date:t.date, time:t.time||'', direction:t.direction||null, conf:{...(t.conf||{})}, sl:t.sl||null, target:t.target||null, tp:t.tp||null, r:(t.r==null?null:t.r), exit:t.exit||null, grade:t.grade||null, note:t.note||t.result||'', photoFull:null, photoThumb:t.thumb||null }; if(t.hasPhoto){ const full=await dbGet('tape_photo_'+t.id); if(full) sheet.photoFull=full; } state.detailId=null; state.sheetOpen=true; state.editingId=t.id; state.moreOpen=!!(t.target||t.exit||t.note||t.result); state.sheet=sheet; state.adding={conf:false,stop:false,tp:false}; state.addVal={conf:'',stop:'',tp:''}; render(); }
 function deleteDetail(){ if(!state.deleteArmed){ state.deleteArmed=true; renderDetail(); clearTimeout(_delT); _delT=setTimeout(()=>{ state.deleteArmed=false; renderDetail(); },3000); return; } const id=state.detailId; const t=state.trades.find(x=>x.id===id); if(t&&t.hasPhoto) dbDel('tape_photo_'+id); state.trades=state.trades.filter(x=>x.id!==id); state.detailId=null; state.deleteArmed=false; saveTrades(); render(); toast('Deleted'); }
 /* data */
 async function exportJSON(){ const full=[]; for(const t of state.trades){ const rec={...t}; if(t.hasPhoto){ rec._photo=await dbGet('tape_photo_'+t.id); } full.push(rec); } const payload={ app:'tape', version:2, exportedAt:new Date().toISOString(), settings:state.settings, days:Object.values(state.days), trades:full }; const blob=new Blob([JSON.stringify(payload)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='tape-backup-'+todayISO()+'.json'; a.click(); URL.revokeObjectURL(url); toast('Backup downloaded'); }
 async function doImport(){ let data; try{ data=JSON.parse(state.importText); }catch(e){ toast('Invalid JSON',true); return; } const arr=Array.isArray(data)?data:data.trades; if(!Array.isArray(arr)){ toast('No trades found',true); return; } try{ const oldKeys=await dbKeys('tape_photo_'); for(const k of oldKeys) await dbDel(k); const oldDays=await dbKeys('tape_day_'); for(const k of oldDays) await dbDel(k); const clean=[]; for(const raw of arr){ const t={...raw}; const photo=t._photo; delete t._photo; if(!t.id) t.id=uid(); t.hasPhoto=!!photo; if(!t.conf) t.conf={}; if(!t.mode) t.mode='live'; if(photo) await dbSet('tape_photo_'+t.id, photo); clean.push(t); } let settings=state.settings; if(data.settings) settings=ensureLists({...settings,...data.settings}); const days={}; if(Array.isArray(data.days)){ for(const d of data.days){ if(d&&d.date){ days[d.date]=d; await dbSet('tape_day_'+d.date,d); } } } state.trades=clean; state.settings=settings; state.days=days; state.importOpen=false; state.importText=''; state.dataOpen=false; saveTrades(); persistSettings(); render(); toast('Imported '+clean.length+' trades'); }catch(e){ toast('Import failed',true); } }
 /* lists */
-function addToList(kind,val){ val=(val||'').trim(); if(!val) return; const id=slug(val); const lblKey={confluences:'confLabels',targets:'targetLabels',stops:'stopLabels'}[kind]; const settings=state.settings; settings[kind]=(settings[kind]||[]).slice(); if(!settings[kind].some(c=>c.id===id)) settings[kind].push({id,label:val}); settings[lblKey]={...(settings[lblKey]||{}),[id]:val}; persistSettings(); }
-function removeFromList(kind,id){ const settings=state.settings; settings[kind]=(settings[kind]||[]).filter(c=>c.id!==id); const sh=state.sheet; if(kind==='stops'&&sh.sl===id) sh.sl=null; if(kind==='targets'&&sh.target===id) sh.target=null; if(kind==='confluences'&&sh.conf&&sh.conf[id]) delete sh.conf[id]; persistSettings(); }
+function addToList(kind,val){ val=(val||'').trim(); if(!val) return; const id=slug(val); const lblKey={confluences:'confLabels',targets:'targetLabels',stops:'stopLabels',tps:'tpLabels'}[kind]; const settings=state.settings; settings[kind]=(settings[kind]||[]).slice(); if(!settings[kind].some(c=>c.id===id)) settings[kind].push({id,label:val}); settings[lblKey]={...(settings[lblKey]||{}),[id]:val}; persistSettings(); }
+function removeFromList(kind,id){ const settings=state.settings; settings[kind]=(settings[kind]||[]).filter(c=>c.id!==id); const sh=state.sheet; if(kind==='stops'&&sh.sl===id) sh.sl=null; if(kind==='targets'&&sh.target===id) sh.target=null; if(kind==='tps'&&sh.tp===id) sh.tp=null; if(kind==='confluences'&&sh.conf&&sh.conf[id]) delete sh.conf[id]; persistSettings(); }
 
 /* ============================================================
    INSIGHTS COMPUTE
@@ -457,6 +462,7 @@ function renderSheet(){
   const slChips=(state.settings.stops||[]).map(c=>`<button data-act="setStop" data-arg="${c.id}" style="${chip(f.sl===c.id, C.peach, C.peachInk)}">${esc(c.label)}</button>`).join('');
   const gradeBtns=[{g:'A',d:'Textbook'},{g:'B',d:'Solid'},{g:'C',d:'Loose'},{g:'D',d:'Broke'}].map(x=>`<button data-act="setGrade" data-arg="${x.g}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:11px 0; border-radius:13px; border:1px solid ${f.grade===x.g?gradeColor(x.g):'transparent'}; background:${f.grade===x.g?gradeColor(x.g):C.raised}; color:${f.grade===x.g?(x.g==='B'?C.periInk:C.ink70):C.dim2}; transition:all .12s;"><span style="font:800 21px 'Hanken Grotesk'; line-height:1;">${x.g}</span><span style="font:600 9px 'Hanken Grotesk'; text-transform:uppercase; letter-spacing:.03em; margin-top:3px;">${x.d}</span></button>`).join('');
   const targetChips=(state.settings.targets||[]).map(c=>`<button data-act="setTarget" data-arg="${c.id}" style="${chip(f.target===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
+  const tpChips=(state.settings.tps||[]).map(c=>`<button data-act="setTp" data-arg="${c.id}" style="${chip(f.tp===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
   const exitChips=EXIT_OPTS.map(c=>`<button data-act="setExit" data-arg="${c.id}" style="${chip(f.exit===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
   const addBtn=act=>`<button data-act="${act}" style="display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; background:transparent; border:1px dashed var(--faint); font:600 13px 'Hanken Grotesk'; color:oklch(0.7 0.012 75);"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Add</button>`;
   const addInput=(id,spec,enter,val)=>`<input id="${id}" type="text" data-input="${spec}" data-enter="${enter}" value="${esc(val)}" placeholder="New + Enter" style="min-width:130px; background:var(--raised); border:1px solid var(--peri); border-radius:999px; padding:8px 14px; color:oklch(0.92 0.01 80); font:600 13px 'Hanken Grotesk';">`;
@@ -469,14 +475,13 @@ function renderSheet(){
     <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Exit reason</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${exitChips}</div></div>
     <div><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">What happened?</div><textarea data-input="sheet:note" rows="3" placeholder="How did it play out, and why?" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:500 14px/1.6 'Hanken Grotesk';">${esc(f.note||'')}</textarea></div>
   </div>` : '';
-  root.innerHTML=`<div data-act="closeSheet" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;">
-    <div data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:92vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);">
+  const inner = `
       <div style="position:sticky; top:0; z-index:3; background:var(--sheet); padding:10px 18px 12px;">
         <div style="width:38px; height:4px; border-radius:3px; background:var(--faint); margin:0 auto 12px;"></div>
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
           <div style="font:800 19px 'Hanken Grotesk'; letter-spacing:-.02em; color:var(--text-bright);">${state.editingId?'Edit trade':'Log trade'}</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="display:flex; gap:3px; background:var(--raised); border-radius:9px; padding:3px;"><button data-act="setMode" data-arg="live" style="${seg(f.mode!=='forward',C.peri)}">Live</button><button data-act="setMode" data-arg="forward" style="${seg(f.mode==='forward',C.peach,C.peachInk)}">Forward</button></div>
+            <div style="display:flex; gap:3px; background:var(--raised); border-radius:9px; padding:3px;"><button data-act="setMode" data-arg="live" style="${modeBtn(f.mode!=='forward',C.peri,C.periInk)}">Live</button><button data-act="setMode" data-arg="forward" style="${modeBtn(f.mode==='forward',C.peach,C.peachInk)}">Forward</button></div>
             <button data-act="closeSheet" style="width:34px; height:34px; border-radius:10px; background:var(--raised); display:grid; place-items:center;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
           </div>
         </div>
@@ -487,16 +492,20 @@ function renderSheet(){
         <div style="margin-bottom:16px;"><div style="${fieldLabel}">Result (R)</div><div style="display:flex; gap:7px; margin-bottom:9px;">${rPresets}</div><div style="display:flex; align-items:center; gap:9px;"><button data-act="rDown" style="width:46px; height:46px; flex:none; border-radius:12px; background:var(--raised); font:700 22px 'Hanken Grotesk'; color:oklch(0.8 0.012 75);">−</button><input type="number" step="0.25" inputmode="decimal" data-input="sheet:r" value="${(f.r===null||f.r===undefined)?'':f.r}" placeholder="e.g. 3, -1, 2.5" style="flex:1; min-width:0; text-align:center; background:var(--raised); border:1px solid transparent; border-radius:12px; padding:12px; color:oklch(0.93 0.01 80); font:700 17px 'JetBrains Mono';"><button data-act="rUp" style="width:46px; height:46px; flex:none; border-radius:12px; background:var(--raised); font:700 22px 'Hanken Grotesk'; color:oklch(0.8 0.012 75);">+</button></div></div>
         <div style="margin-bottom:16px;"><div style="${fieldLabel}">Confluences</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${confChips}${state.adding.conf?addInput('conf-add-inp','add:conf','addConf',state.addVal.conf):''}${addBtn('toggleConfAdd')}</div></div>
         <div style="margin-bottom:16px;"><div style="${fieldLabel}">Stop placement</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${slChips}${state.adding.stop?addInput('stop-add-inp','add:stop','addStop',state.addVal.stop):''}${addBtn('toggleStopAdd')}</div></div>
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Take profit</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${tpChips}${state.adding.tp?addInput('tp-add-inp','add:tp','addTp',state.addVal.tp):''}${addBtn('toggleTpAdd')}</div></div>
         <div style="margin-bottom:16px;"><div style="font:600 12px 'Hanken Grotesk'; color:oklch(0.7 0.012 75); margin-bottom:9px;">Process grade <span style="color:oklch(0.55 0.012 75); font-weight:500;">· grade execution, not P&amp;L</span></div><div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">${gradeBtns}</div></div>
         <button data-act="toggleMore" style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; padding:12px 2px; background:none; font:600 13px 'Hanken Grotesk'; color:oklch(0.66 0.012 75);">More detail (optional)<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:${state.moreOpen?'rotate(180deg)':'none'};"><path d="M6 9l6 6 6-6"></path></svg></button>
         ${moreBlock}
         <button data-act="saveTrade" style="width:100%; margin-top:14px; padding:16px; border-radius:14px; background:var(--peri); font:700 15px 'Hanken Grotesk'; color:var(--peri-ink); box-shadow:0 8px 22px var(--peri-glow);">${state.editingId?'Save changes':'Log trade'}</button>
-      </div>
-    </div>
-  </div>`;
+      </div>`;
+  if(!$('#sheet-card')){
+    root.innerHTML=`<div data-act="closeSheet" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;"><div id="sheet-card" data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:92vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);"><div id="sheet-inner"></div></div></div>`;
+  }
+  $('#sheet-inner').innerHTML = inner;
   if(!f.photoFull){ const dz=$('#drop-zone'); if(dz){ const st=e=>e.preventDefault(); dz.addEventListener('dragover',st); dz.addEventListener('dragenter',st); dz.addEventListener('drop',e=>{ e.preventDefault(); const fl=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(fl) handleImage(fl); }); } }
   if(state.adding.conf){ const i=$('#conf-add-inp'); if(i) i.focus(); }
   if(state.adding.stop){ const i=$('#stop-add-inp'); if(i) i.focus(); }
+  if(state.adding.tp){ const i=$('#tp-add-inp'); if(i) i.focus(); }
 }
 
 /* ---------- detail ---------- */
@@ -511,6 +520,7 @@ function renderDetail(){
   const cell=(lbl,val,col)=>`<div style="background:var(--raised); border-radius:12px; padding:11px 13px;"><div style="font:600 10px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;">${lbl}</div><div style="font:700 14px 'Hanken Grotesk'; color:${col||'oklch(0.86 0.01 80)'};">${val}</div></div>`;
   const confSec = conf.length?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Confluences</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${conf.map(c=>`<span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(c)}</span>`).join('')}</div></div>`:'';
   const exitSec = t.exit?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Exit</div><span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(exitMap[t.exit]||t.exit)}</span></div>`:'';
+  const targetSec = t.target?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Target</div><span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(targetLabel(t.target))}</span></div>`:'';
   const noteTxt=t.note||t.result||'';
   const noteSec = noteTxt?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">What happened?</div><div style="font:500 13.5px/1.65 'Hanken Grotesk'; color:oklch(0.86 0.01 80); background:var(--raised); border-radius:12px; padding:13px 14px; white-space:pre-wrap;">${esc(noteTxt)}</div></div>`:'';
   const delStyle=`flex:${state.deleteArmed?'1.4':'1'}; padding:13px; border-radius:12px; border:1px solid var(--rose); background:${state.deleteArmed?'var(--rose-glow)':'transparent'}; font:700 13.5px 'Hanken Grotesk'; color:var(--rose); display:inline-flex; align-items:center; justify-content:center; gap:8px;`;
@@ -529,9 +539,9 @@ function renderDetail(){
           <div style="background:var(--raised); border-radius:12px; padding:11px 13px;"><div style="font:600 10px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;">Result</div><div style="font:800 16px 'JetBrains Mono'; color:${rColor};">${fmtR(t.r)}</div></div>
           ${cell('Process', t.grade?'Grade '+t.grade:'—', gradeColor(t.grade))}
           ${cell('Stop', t.sl?esc(stopLabel(t.sl)):'—')}
-          ${cell('Target', t.target?esc(targetLabel(t.target)):'—')}
+          ${cell('Take profit', t.tp?esc(tpLabel(t.tp)):'—')}
         </div>
-        ${confSec}${exitSec}${noteSec}
+        ${confSec}${targetSec}${exitSec}${noteSec}
         <div style="display:flex; gap:11px; margin-top:6px;">
           <button data-act="editDetail" style="flex:1; padding:13px; border-radius:12px; background:var(--raised); font:700 13.5px 'Hanken Grotesk'; color:oklch(0.86 0.01 80); display:inline-flex; align-items:center; justify-content:center; gap:8px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit</button>
           <button data-act="deleteDetail" style="${delStyle}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>${state.deleteArmed?'Tap again':'Delete'}</button>
@@ -567,6 +577,7 @@ function renderData(){
           <div style="font:700 12px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:12px;">Manage lists</div>
           ${mk('confluences','Confluences','New confluence')}
           ${mk('stops','Stop placements','New stop placement')}
+          ${mk('tps','Take profit','New take-profit level')}
           ${mk('targets','Targets','New target')}
         </div>
         <div style="font:500 11px/1.55 'Hanken Grotesk'; color:oklch(0.55 0.012 75); margin-top:8px;">Export includes your screenshots — it's a full backup. Keep a copy before clearing your browser.</div>
@@ -604,6 +615,9 @@ const ACTIONS={
   setStop:a=>mutSheet({sl: state.sheet.sl===a?null:a}),
   toggleStopAdd:()=>{ state.adding.stop=!state.adding.stop; renderSheet(); },
   addStop:()=>{ addToList('stops', state.addVal.stop); state.adding.stop=false; state.addVal.stop=''; renderSheet(); },
+  setTp:a=>mutSheet({tp: state.sheet.tp===a?null:a}),
+  toggleTpAdd:()=>{ state.adding.tp=!state.adding.tp; renderSheet(); },
+  addTp:()=>{ addToList('tps', state.addVal.tp); state.adding.tp=false; state.addVal.tp=''; renderSheet(); },
   setGrade:a=>mutSheet({grade: state.sheet.grade===a?null:a}),
   toggleMore:()=>{ state.moreOpen=!state.moreOpen; renderSheet(); },
   setTarget:a=>mutSheet({target: state.sheet.target===a?null:a}),
@@ -630,6 +644,7 @@ document.addEventListener('input', e=>{ const t=e.target.closest('[data-input]')
 document.addEventListener('keydown', e=>{ if(e.key!=='Enter') return; const t=e.target.closest('[data-enter]'); if(!t) return; e.preventDefault(); const spec=t.dataset.enter;
   if(spec==='addConf') ACTIONS.addConf();
   else if(spec==='addStop') ACTIONS.addStop();
+  else if(spec==='addTp') ACTIONS.addTp();
   else if(spec.startsWith('manage:')){ const kind=spec.slice(7); addToList(kind, state.manageVal[kind]); state.manageVal[kind]=''; renderData(); }
 });
 $('#file-cam').addEventListener('change', e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); e.target.value=''; });
