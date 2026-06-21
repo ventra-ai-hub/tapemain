@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1815">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tape">
+<meta name="description" content="Tape — an ICT/SMC trading journal. On the record.">
+<title>Tape</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:oklch(0.205 0.006 70); --card:oklch(0.248 0.008 70); --raised:oklch(0.30 0.008 70);
+  --sheet:oklch(0.225 0.007 70); --deep:oklch(0.18 0.006 70);
+  --border:oklch(0.34 0.008 70); --border-soft:oklch(0.32 0.008 70); --faint:oklch(0.4 0.008 70);
+  --text:oklch(0.93 0.01 80); --text-bright:oklch(0.95 0.01 80);
+  --dim:oklch(0.62 0.012 75); --dim2:oklch(0.78 0.012 80); --muted:oklch(0.6 0.012 75);
+  --peri:oklch(0.74 0.09 275); --peri-ink:oklch(0.2 0.02 275); --peri-glow:oklch(0.74 0.09 275 / .22);
+  --sage:oklch(0.82 0.09 160); --sage-ink:oklch(0.2 0.02 160);
+  --rose:oklch(0.76 0.10 20); --rose-ink:oklch(0.2 0.02 20); --rose-glow:oklch(0.76 0.10 20 / .16);
+  --peach:oklch(0.83 0.07 75); --peach-ink:oklch(0.2 0.02 75); --peach-glow:oklch(0.83 0.07 75 / .14);
+  --ink70:oklch(0.2 0.02 70); --placeholder:oklch(0.5 0.012 75);
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overscroll-behavior-y:none; letter-spacing:-.011em;
+}
+input,textarea,select,button{font-family:inherit; color:inherit}
+input,textarea{font-size:16px}
+textarea{resize:none}
+button{cursor:pointer; background:none; border:none}
+::placeholder{color:var(--placeholder)}
+input:focus,textarea:focus{outline:none; border-color:var(--peri) !important}
+.strip{background-image:repeating-linear-gradient(135deg, rgba(255,250,240,.045) 0 7px, transparent 7px 14px)}
+.noscroll{-ms-overflow-style:none; scrollbar-width:none}
+.noscroll::-webkit-scrollbar{display:none}
+.app{max-width:480px; margin:0 auto; min-height:100dvh; background:var(--bg); position:relative; padding-bottom:calc(var(--safe-b) + 96px)}
+@keyframes tpUp{from{transform:translateY(40px); opacity:.4} to{transform:none; opacity:1}}
+@keyframes tpFade{from{opacity:0} to{opacity:1}}
+@keyframes tpIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important; transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <main id="main"></main>
+</div>
+<nav id="nav"></nav>
+<div id="sheet-root"></div>
+<div id="detail-root"></div>
+<div id="data-root"></div>
+<div id="lightbox-root"></div>
+<div id="toast-root"></div>
+<input type="file" id="file-cam" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="file-up" accept="image/*" style="display:none">
+
+<script>
+"use strict";
+/* ============================================================
+   TAPE — ICT/SMC trading journal. Self-contained, no deps.
+   Storage auto-detects: window.storage (Claude) / IndexedDB.
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- palette refs for inline styles ---------- */
+const C = {
+  bg:'var(--bg)', card:'var(--card)', raised:'var(--raised)', sheet:'var(--sheet)', deep:'var(--deep)',
+  border:'var(--border)', text:'var(--text)', dim:'var(--dim)', dim2:'var(--dim2)', muted:'var(--muted)', faint:'var(--faint)',
+  peri:'var(--peri)', periInk:'var(--peri-ink)', sage:'var(--sage)', sageInk:'var(--sage-ink)',
+  rose:'var(--rose)', roseInk:'var(--rose-ink)', peach:'var(--peach)', peachInk:'var(--peach-ink)', ink70:'var(--ink70)'
+};
+
+/* ---------- state ---------- */
+const state = {
+  ready:false, view:'today', today: todayISO(),
+  trades:[], settings:{}, days:{},
+  sheetOpen:false, editingId:null, sheet: freshSheet(), moreOpen:false,
+  detailId:null, detailPhoto:null, deleteArmed:false,
+  dataOpen:false, importOpen:false, importText:'',
+  lightboxSrc:null, insScope:'all', jFilter:'all', toast:null,
+  adding:{conf:false,stop:false,tp:false}, addVal:{conf:'',stop:'',tp:''},
+  manageVal:{confluences:'',stops:'',targets:''}
+};
+let _toastT=null, _dayT=null, _delT=null, _idb=null;
+
+/* ---------- date / id helpers ---------- */
+function todayISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function nowTime(){ return new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
+function uid(){ return 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function slug(s){ return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || ('c'+Date.now().toString(36)); }
+function freshSheet(){ return { mode:'live', date:todayISO(), time:nowTime(), direction:null, conf:{}, sl:null, target:null, tp:null, r:null, exit:null, grade:null, note:'', photoFull:null, photoThumb:null }; }
+
+/* ---------- defaults / lists ---------- */
+const DEFAULT_CONF=[{id:'rb',label:'Rejection Block'},{id:'midnight',label:'Midnight Open'},{id:'nyse',label:'9:30'},{id:'ten',label:'10:00'},{id:'pde',label:'PDE'},{id:'ndog',label:'NDOG'}];
+const DEFAULT_TARGETS=[{id:'liquidity',label:'Liquidity (DOL)'},{id:'opp-fvg',label:'Opposing FVG'},{id:'opp-rb',label:'Opposing RB'},{id:'pd-array',label:'PD Array'},{id:'pdh-pdl',label:'PDH / PDL'}];
+const DEFAULT_STOPS=[{id:'wick',label:'Wick Extreme'},{id:'body',label:'Body'},{id:'79',label:'.79'}];
+const DEFAULT_TPS=[{id:'furthest-fvg',label:'Furthest FVG'},{id:'930',label:'9:30'},{id:'1000',label:'10:00'}];
+const LEGACY_CONF={rb:'Rejection Block',midnight:'Midnight',nyse:'9:30',ten:'10am',pde:'PDE',ndog:'NDOG'};
+const EXIT_OPTS=[{id:'target',label:'Hit target'},{id:'stopped',label:'Stopped out'},{id:'plan',label:'Manual — to plan'},{id:'fear',label:'Manual — fear'},{id:'greed',label:'Manual — greed'},{id:'time',label:'Time stop'}];
+function ensureLists(s){
+  s=s||{};
+  if(!Array.isArray(s.confluences)||!s.confluences.length) s.confluences=DEFAULT_CONF.map(c=>({...c}));
+  if(!Array.isArray(s.targets)||!s.targets.length) s.targets=DEFAULT_TARGETS.map(c=>({...c}));
+  if(!Array.isArray(s.stops)||!s.stops.length) s.stops=DEFAULT_STOPS.map(c=>({...c}));
+  if(!Array.isArray(s.tps)||!s.tps.length) s.tps=DEFAULT_TPS.map(c=>({...c}));
+  s.confLabels=s.confLabels||{}; s.targetLabels=s.targetLabels||{}; s.stopLabels=s.stopLabels||{}; s.tpLabels=s.tpLabels||{};
+  [...DEFAULT_CONF,...s.confluences].forEach(c=>{ if(!s.confLabels[c.id]) s.confLabels[c.id]=c.label; });
+  Object.entries(LEGACY_CONF).forEach(([id,l])=>{ if(!s.confLabels[id]) s.confLabels[id]=l; });
+  [...DEFAULT_TARGETS,...s.targets].forEach(c=>{ if(!s.targetLabels[c.id]) s.targetLabels[c.id]=c.label; });
+  [...DEFAULT_STOPS,...s.stops].forEach(c=>{ if(!s.stopLabels[c.id]) s.stopLabels[c.id]=c.label; });
+  [...DEFAULT_TPS,...s.tps].forEach(c=>{ if(!s.tpLabels[c.id]) s.tpLabels[c.id]=c.label; });
+  return s;
+}
+function confLabel(id){ return (state.settings.confLabels&&state.settings.confLabels[id]) || LEGACY_CONF[id] || id; }
+function targetLabel(id){ return (state.settings.targetLabels&&state.settings.targetLabels[id]) || id; }
+function stopLabel(id){ return (state.settings.stopLabels&&state.settings.stopLabels[id]) || id; }
+function tpLabel(id){ return (state.settings.tpLabels&&state.settings.tpLabels[id]) || id; }
+
+/* ---------- storage ---------- */
+const HAS_CLAUDE = typeof window!=='undefined' && window.storage && typeof window.storage.get==='function';
+async function dbGet(k){ if(HAS_CLAUDE){ try{ const r=await window.storage.get(k); return r?r.value:null; }catch(e){ return null; } } return idbGet(k); }
+async function dbSet(k,v){ if(HAS_CLAUDE) return window.storage.set(k,v); return idbSet(k,v); }
+async function dbDel(k){ if(HAS_CLAUDE){ try{ return await window.storage.delete(k); }catch(e){ return; } } return idbDel(k); }
+async function dbKeys(p){ if(HAS_CLAUDE){ try{ const r=await window.storage.list(p); return (r&&r.keys)||[]; }catch(e){ return []; } } return idbKeys(p); }
+function idbOpen(){ if(_idb) return Promise.resolve(_idb); return new Promise((res,rej)=>{ const rq=indexedDB.open('tape-db',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv'); rq.onsuccess=()=>{ _idb=rq.result; res(_idb); }; rq.onerror=()=>rej(rq.error); }); }
+function idbTx(m){ return idbOpen().then(db=>db.transaction('kv',m).objectStore('kv')); }
+async function idbGet(k){ const st=await idbTx('readonly'); return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result??null); q.onerror=()=>r(null); }); }
+async function idbSet(k,v){ const st=await idbTx('readwrite'); return new Promise(r=>{ const q=st.put(v,k); q.onsuccess=()=>r(true); q.onerror=()=>r(false); }); }
+async function idbDel(k){ const st=await idbTx('readwrite'); return new Promise(r=>{ const q=st.delete(k); q.onsuccess=()=>r(true); q.onerror=()=>r(false); }); }
+async function idbKeys(p){ const st=await idbTx('readonly'); return new Promise(r=>{ const out=[]; const q=st.openKeyCursor(); q.onsuccess=()=>{ const c=q.result; if(c){ if(!p||String(c.key).startsWith(p)) out.push(c.key); c.continue(); } else r(out); }; q.onerror=()=>r([]); }); }
+function persistSettings(){ try{ dbSet('tape_settings', state.settings); }catch(e){} }
+function saveTrades(){ return dbSet('tape_trades', state.trades); }
+
+/* ---------- toast ---------- */
+function toast(msg,err){ state.toast={msg,err:!!err}; renderToast(); clearTimeout(_toastT); _toastT=setTimeout(()=>{ state.toast=null; renderToast(); },2400); }
+
+/* ---------- formatting ---------- */
+function fmtR(v){ if(v===null||v===undefined||isNaN(v)) return '—'; const n=Number(v); let s=Math.abs(n).toFixed(2); if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,''); return (n>0?'+':n<0?'−':'')+s+'R'; }
+function fmtDate(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+function fmtWeekday(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'}); }
+function fmtDateLong(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'}); }
+function parseTime(str){ if(!str) return null; const m=String(str).match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i); if(!m) return null; let h=+m[1]; const mi=+m[2]; const ap=(m[3]||'').toLowerCase(); if(ap==='pm'&&h<12) h+=12; if(ap==='am'&&h===12) h=0; return h*60+mi; }
+function normalizeTime(str){
+  if(str==null) return ''; str=String(str).trim(); if(!str) return '';
+  const ap=str.match(/([ap])\.?\s*m/i); const digits=str.replace(/[^0-9]/g,''); if(!digits) return str;
+  let h,m;
+  if(digits.length<=2){ h=parseInt(digits,10); m=0; } else { h=parseInt(digits.slice(0,digits.length-2),10); m=parseInt(digits.slice(-2),10); }
+  if(isNaN(h)) return str; if(m>59) m=59;
+  let mer;
+  if(ap){ mer=ap[1].toLowerCase()==='p'?'PM':'AM'; if(h>12) h-=12; }
+  else { if(h===0){ h=12; mer='AM'; } else if(h>=13&&h<=23){ h-=12; mer='PM'; } else if(h===12){ mer='PM'; } else if(h>=8&&h<=11){ mer='AM'; } else { mer='PM'; } }
+  if(h<1||h>12) h=((h+11)%12)+1;
+  return h+':'+String(m).padStart(2,'0')+' '+mer;
+}
+function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function gradeColor(g){ return g==='A'?C.sage:g==='B'?C.peri:g==='C'?C.peach:g==='D'?C.rose:C.dim2; }
+
+/* ---------- image ---------- */
+function compress(file,maxEdge,q){ return new Promise((resolve,reject)=>{ const rd=new FileReader(); rd.onload=()=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1,maxEdge/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc); const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.fillStyle='#161310'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h); resolve(c.toDataURL('image/jpeg',q)); }; img.onerror=reject; img.src=rd.result; }; rd.onerror=reject; rd.readAsDataURL(file); }); }
+async function handleImage(file){ if(!file||!file.type||!file.type.startsWith('image/')){ toast('Not an image',true); return; } try{ const [full,thumb]=await Promise.all([compress(file,1400,0.72),compress(file,200,0.5)]); state.sheet.photoFull=full; state.sheet.photoThumb=thumb; renderSheet(); }catch(e){ toast('Could not read image',true); } }
+
+/* ---------- style builders ---------- */
+function chip(on,col,ink){ return on
+  ? `display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:999px; border:1px solid ${col}; background:${col}; color:${ink||C.periInk}; font:700 13px 'Hanken Grotesk';`
+  : `display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:999px; border:1px solid transparent; background:${C.raised}; color:${C.dim2}; font:600 13px 'Hanken Grotesk';`; }
+function bigChip(on,col,ink){ return `flex:1; text-align:center; padding:13px 0; border-radius:13px; border:1px solid ${on?col:'transparent'}; background:${on?col:C.raised}; color:${on?(ink||C.periInk):C.dim2}; font:700 14px 'Hanken Grotesk'; transition:all .12s;`; }
+function seg(on,col,ink){ return `flex:1; text-align:center; padding:10px 0; border-radius:9px; border:none; background:${on?col:C.raised}; color:${on?(ink||C.periInk):C.dim}; font:700 12.5px 'Hanken Grotesk'; transition:all .12s;`; }
+function modeBtn(on,col,ink){ return `padding:7px 15px; border-radius:7px; border:none; background:${on?col:'transparent'}; color:${on?(ink||C.periInk):C.dim}; font:700 13px 'Hanken Grotesk'; white-space:nowrap; transition:all .12s;`; }
+function navStyle(on){ return `display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border-radius:999px; border:none; transition:all .15s; color:${on?C.periInk:C.dim}; background:${on?C.peri:'transparent'}; font:700 13px 'Hanken Grotesk';`; }
+
+/* ---------- trade card VM ---------- */
+function buildVM(t){
+  const r=t.r, win=r>0, loss=r<0;
+  const conf=Object.keys(t.conf||{}).filter(k=>t.conf[k]).map(k=>confLabel(k));
+  const sum=[...conf, ...(t.sl?['stop '+stopLabel(t.sl)]:[])].join(' · ')||'No tags';
+  return { id:t.id, thumb:t.thumb||'', dir:t.direction,
+    dirLabel:t.direction==='long'?'LONG':t.direction==='short'?'SHORT':'—',
+    dirBg: t.direction==='short'?C.rose:C.sage,
+    rText:fmtR(r), rColor: win?C.sage:loss?C.rose:C.dim2,
+    time:t.time||'', grade:t.grade||'', gradeShow:!!t.grade, gradeCol:gradeColor(t.grade),
+    confList:conf.slice(0,3), slLabel:t.sl?stopLabel(t.sl):'', slShow:!!t.sl,
+    fwd:t.mode==='forward', summary:sum };
+}
+
+/* ---------- bias / scope ---------- */
+function tradeBias(t){ if(t.bias==='with'||t.bias==='counter') return t.bias; const day=state.days[t.date]; if(day&&(day.bias==='long'||day.bias==='short')&&t.direction){ return day.bias===t.direction?'with':'counter'; } return null; }
+function scopedTrades(){ const sc=state.insScope; return state.trades.filter(t=> sc==='all'?true : sc==='forward'?t.mode==='forward':(t.mode||'live')==='live'); }
+function makeBars(groups){ return groups.filter(g=>g.n>0).map(g=>({ label:g.label, width:Math.max(4,Math.min(100,g.wr)).toFixed(0)+'%', color:g.wr>=55?C.sage:g.wr>=45?C.peach:C.rose, wr:g.wr.toFixed(0)+'%', sub:fmtR(g.avg)+' · '+g.n+'t' })); }
+
+/* ============================================================
+   ACTIONS / STATE MUTATION
+   ============================================================ */
+/* sheet */
+function openSheet(){ state.sheetOpen=true; state.editingId=null; state.moreOpen=false; state.sheet=freshSheet(); state.adding={conf:false,stop:false}; state.addVal={conf:'',stop:''}; renderSheet(); }
+function closeSheet(){ state.sheetOpen=false; renderSheet(); }
+function mutSheet(patch){ Object.assign(state.sheet,patch); renderSheet(); }
+async function saveTrade(){
+  const f=state.sheet;
+  if(!f.direction){ toast('Pick a direction',true); return; }
+  const id=state.editingId||uid();
+  const prev=state.editingId?state.trades.find(t=>t.id===id):null;
+  const rec={ id, mode:f.mode||'live', date:f.date||todayISO(), time:normalizeTime(f.time)||'', direction:f.direction,
+    conf:Object.fromEntries(Object.entries(f.conf||{}).filter(([k,v])=>v)), sl:f.sl||null, target:f.target||null, tp:f.tp||null,
+    r:(f.r===''||f.r===null||f.r===undefined||isNaN(f.r))?null:Number(f.r), exit:f.exit||null, grade:f.grade||null, note:f.note||'',
+    hasPhoto:!!f.photoFull, thumb:f.photoThumb||null, createdAt: prev?prev.createdAt:Date.now(), updatedAt:Date.now() };
+  try{
+    if(f.photoFull){ await dbSet('tape_photo_'+id, f.photoFull); }
+    else if(state.editingId){ await dbDel('tape_photo_'+id); }
+    if(state.editingId){ const i=state.trades.findIndex(t=>t.id===id); if(i>=0) state.trades[i]=rec; }
+    else { state.trades.unshift(rec); }
+    const wasEditing=state.editingId; state.sheetOpen=false; state.editingId=null;
+    saveTrades(); render();
+    toast(wasEditing?'Trade updated':'Logged ✓');
+  }catch(e){ toast('Save failed — storage may be full',true); }
+}
+/* day fields */
+function setDay(field,val){ const rec={...(state.days[state.today]||{date:state.today}), date:state.today, [field]:val}; state.days[state.today]=rec; clearTimeout(_dayT); _dayT=setTimeout(()=>{ const d=state.days[state.today]; if(d) dbSet('tape_day_'+state.today, d); },400); }
+function setBias(b){ const cur=(state.days[state.today]||{}).bias; setDay('bias', cur===b?null:b); renderTodayView(); }
+function setPlanGrade(g){ const cur=(state.days[state.today]||{}).planGrade; setDay('planGrade', cur===g?null:g); renderTodayView(); }
+function shiftDay(delta){ const d=new Date(state.today+'T00:00:00'); d.setDate(d.getDate()+delta); const iso=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); if(iso>todayISO()) return; state.today=iso; renderTodayView(); }
+/* detail */
+async function openDetail(id){ const t=state.trades.find(x=>x.id===id); if(!t) return; state.detailId=id; state.detailPhoto=null; state.deleteArmed=false; renderDetail(); if(t.hasPhoto){ const full=await dbGet('tape_photo_'+id); if(full){ state.detailPhoto=full; if(state.detailId===id) renderDetail(); } } }
+function closeDetail(){ state.detailId=null; state.deleteArmed=false; renderDetail(); }
+async function editDetail(){ const t=state.trades.find(x=>x.id===state.detailId); if(!t) return; const sheet={ mode:t.mode||'live', date:t.date, time:t.time||'', direction:t.direction||null, conf:{...(t.conf||{})}, sl:t.sl||null, target:t.target||null, tp:t.tp||null, r:(t.r==null?null:t.r), exit:t.exit||null, grade:t.grade||null, note:t.note||t.result||'', photoFull:null, photoThumb:t.thumb||null }; if(t.hasPhoto){ const full=await dbGet('tape_photo_'+t.id); if(full) sheet.photoFull=full; } state.detailId=null; state.sheetOpen=true; state.editingId=t.id; state.moreOpen=!!(t.target||t.exit||t.note||t.result); state.sheet=sheet; state.adding={conf:false,stop:false,tp:false}; state.addVal={conf:'',stop:'',tp:''}; render(); }
+function deleteDetail(){ if(!state.deleteArmed){ state.deleteArmed=true; renderDetail(); clearTimeout(_delT); _delT=setTimeout(()=>{ state.deleteArmed=false; renderDetail(); },3000); return; } const id=state.detailId; const t=state.trades.find(x=>x.id===id); if(t&&t.hasPhoto) dbDel('tape_photo_'+id); state.trades=state.trades.filter(x=>x.id!==id); state.detailId=null; state.deleteArmed=false; saveTrades(); render(); toast('Deleted'); }
+/* data */
+async function exportJSON(){ const full=[]; for(const t of state.trades){ const rec={...t}; if(t.hasPhoto){ rec._photo=await dbGet('tape_photo_'+t.id); } full.push(rec); } const payload={ app:'tape', version:2, exportedAt:new Date().toISOString(), settings:state.settings, days:Object.values(state.days), trades:full }; const blob=new Blob([JSON.stringify(payload)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='tape-backup-'+todayISO()+'.json'; a.click(); URL.revokeObjectURL(url); toast('Backup downloaded'); }
+async function doImport(){ let data; try{ data=JSON.parse(state.importText); }catch(e){ toast('Invalid JSON',true); return; } const arr=Array.isArray(data)?data:data.trades; if(!Array.isArray(arr)){ toast('No trades found',true); return; } try{ const oldKeys=await dbKeys('tape_photo_'); for(const k of oldKeys) await dbDel(k); const oldDays=await dbKeys('tape_day_'); for(const k of oldDays) await dbDel(k); const clean=[]; for(const raw of arr){ const t={...raw}; const photo=t._photo; delete t._photo; if(!t.id) t.id=uid(); t.hasPhoto=!!photo; if(!t.conf) t.conf={}; if(!t.mode) t.mode='live'; if(photo) await dbSet('tape_photo_'+t.id, photo); clean.push(t); } let settings=state.settings; if(data.settings) settings=ensureLists({...settings,...data.settings}); const days={}; if(Array.isArray(data.days)){ for(const d of data.days){ if(d&&d.date){ days[d.date]=d; await dbSet('tape_day_'+d.date,d); } } } state.trades=clean; state.settings=settings; state.days=days; state.importOpen=false; state.importText=''; state.dataOpen=false; saveTrades(); persistSettings(); render(); toast('Imported '+clean.length+' trades'); }catch(e){ toast('Import failed',true); } }
+/* lists */
+function addToList(kind,val){ val=(val||'').trim(); if(!val) return; const id=slug(val); const lblKey={confluences:'confLabels',targets:'targetLabels',stops:'stopLabels',tps:'tpLabels'}[kind]; const settings=state.settings; settings[kind]=(settings[kind]||[]).slice(); if(!settings[kind].some(c=>c.id===id)) settings[kind].push({id,label:val}); settings[lblKey]={...(settings[lblKey]||{}),[id]:val}; persistSettings(); }
+function removeFromList(kind,id){ const settings=state.settings; settings[kind]=(settings[kind]||[]).filter(c=>c.id!==id); const sh=state.sheet; if(kind==='stops'&&sh.sl===id) sh.sl=null; if(kind==='targets'&&sh.target===id) sh.target=null; if(kind==='tps'&&sh.tp===id) sh.tp=null; if(kind==='confluences'&&sh.conf&&sh.conf[id]) delete sh.conf[id]; persistSettings(); }
+
+/* ============================================================
+   INSIGHTS COMPUTE
+   ============================================================ */
+function computeInsights(){
+  const all=scopedTrades(); const rt=all.filter(t=>t.r!=null&&!isNaN(t.r)); const n=rt.length;
+  const wins=rt.filter(t=>t.r>0), losses=rt.filter(t=>t.r<0);
+  const wr=n?wins.length/n*100:0, exp=mean(rt.map(t=>t.r)), total=rt.reduce((s,t)=>s+t.r,0);
+  const st={ expText:n?fmtR(exp):'—', expColor:exp>=0?C.sage:C.rose, wrText:n?wr.toFixed(0)+'%':'—', wrSub:wins.length+'W / '+losses.length+'L', totalText:n?fmtR(total):'—', totalColor:total>=0?C.sage:C.rose, totalSub:'Total · '+n+' rated' };
+  const chrono=[...rt].sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||''))||(a.createdAt||0)-(b.createdAt||0));
+  let cum=0; const eq=chrono.map(t=>{ cum+=t.r; return cum; });
+  let eqVals={eqShow:false};
+  if(eq.length>=2){ const W=560,H=150,pad=8; const pts=[0,...eq]; const min=Math.min(0,...pts), max=Math.max(0,...pts); const range=(max-min)||1; const x=i=>pad+(i/(pts.length-1||1))*(W-2*pad); const y=v=>H-pad-((v-min)/range)*(H-2*pad); const line=pts.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' '); const area=`${line} L${x(pts.length-1).toFixed(1)} ${y(min).toFixed(1)} L${x(0).toFixed(1)} ${y(min).toFixed(1)} Z`; const last=eq[eq.length-1]; eqVals={ eqShow:true, eqLine:line, eqArea:area, eqCol:last>=0?C.sage:C.rose, eqZeroY:y(0).toFixed(1), eqLastX:x(pts.length-1).toFixed(1), eqLastY:y(last).toFixed(1) }; }
+  const confIds=new Set(state.settings.confluences.map(c=>c.id)); rt.forEach(t=>Object.keys(t.conf||{}).forEach(k=>{ if(t.conf[k]) confIds.add(k); }));
+  const confGroups=[...confIds].map(id=>{ const sub=rt.filter(t=>t.conf&&t.conf[id]); const w=sub.filter(t=>t.r>0).length; return {label:confLabel(id), n:sub.length, wr:sub.length?w/sub.length*100:0, avg:sub.length?mean(sub.map(t=>t.r)):0}; }).filter(g=>g.n>0).sort((a,b)=>b.wr-a.wr||b.avg-a.avg);
+  const confBars=makeBars(confGroups);
+  const stopIds=new Set(state.settings.stops.map(c=>c.id)); rt.forEach(t=>{ if(t.sl) stopIds.add(t.sl); });
+  const slGroups=[...stopIds].map(id=>{ const sub=rt.filter(t=>t.sl===id); const w=sub.filter(t=>t.r>0).length; return {label:stopLabel(id), n:sub.length, wr:sub.length?w/sub.length*100:0, avg:sub.length?mean(sub.map(t=>t.r)):0}; }).filter(g=>g.n>0).sort((a,b)=>b.avg-a.avg||b.wr-a.wr);
+  const slBars=makeBars(slGroups);
+  const buckets=[{label:'Pre 9:30',max:570},{label:'9:30–10',max:600},{label:'10–10:30',max:630},{label:'10:30–11',max:660},{label:'After 11',max:9999}];
+  const sessRows=buckets.map((b,i)=>{ const sub=rt.filter(t=>{ const m=parseTime(t.time); if(m==null) return false; const prev=i>0?buckets[i-1].max:-1; return m>=prev&&m<b.max; }); const w=sub.filter(t=>t.r>0).length; return {label:b.label, n:sub.length, wr:sub.length?w/sub.length*100:0, avg:sub.length?mean(sub.map(t=>t.r)):0}; });
+  const sessionBars=makeBars(sessRows);
+  const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayGroups=[1,2,3,4,5,6,0].map(di=>{ const sub=rt.filter(t=>new Date(t.date+'T00:00:00').getDay()===di); const w=sub.filter(t=>t.r>0).length; return {label:dn[di], n:sub.length, wr:sub.length?w/sub.length*100:0, avg:sub.length?mean(sub.map(t=>t.r)):0}; });
+  const dayBars=makeBars(dayGroups);
+  const withT=rt.filter(t=>tradeBias(t)==='with'), counterT=rt.filter(t=>tradeBias(t)==='counter');
+  let bias={biasShow:false};
+  if(withT.length||counterT.length){ const wAvg=withT.length?mean(withT.map(t=>t.r)):null, cAvg=counterT.length?mean(counterT.map(t=>t.r)):null; const wWr=withT.length?withT.filter(t=>t.r>0).length/withT.length*100:0, cWr=counterT.length?counterT.filter(t=>t.r>0).length/counterT.length*100:0; let verdict='Set a daily bias to compare with vs against it.'; if(wAvg!=null&&cAvg!=null){ verdict= cAvg<wAvg-0.2?'Counter-bias trades are dragging you down.':cAvg>wAvg+0.2?'Counter-bias has worked — unusual; check the sample.':'Roughly even either way.'; } bias={ biasShow:true, biasVerdict:verdict, biasWithAvg:wAvg!=null?fmtR(wAvg):'—', biasWithSub:wWr.toFixed(0)+'% · '+withT.length+'t', biasCounterAvg:cAvg!=null?fmtR(cAvg):'—', biasCounterSub:cWr.toFixed(0)+'% · '+counterT.length+'t' }; }
+  const good=rt.filter(t=>t.grade==='A'||t.grade==='B'), loose=rt.filter(t=>t.grade==='C'||t.grade==='D');
+  let tax={taxShow:false};
+  if(good.length&&loose.length){ const gR=mean(good.map(t=>t.r)), lR=mean(loose.map(t=>t.r)); tax={ taxShow:true, taxGood:fmtR(gR), taxLoose:fmtR(lR), taxGap:fmtR(gR-lR), taxGoodN:good.length, taxLooseN:loose.length }; }
+  let tilt={tiltShow:false}; const afterWin=[], afterLoss=[]; for(let i=1;i<chrono.length;i++){ const p=chrono[i-1]; if(p.r>0) afterWin.push(chrono[i].r); else if(p.r<0) afterLoss.push(chrono[i].r); }
+  if(afterWin.length>=2&&afterLoss.length>=2){ const aw=mean(afterWin), al=mean(afterLoss); tilt={ tiltShow:true, tiltAfterWin:fmtR(aw), tiltAfterLoss:fmtR(al), tiltWinN:afterWin.length+'t', tiltLossN:afterLoss.length+'t', tiltLossColor:al<aw-0.2?C.rose:C.sage, tiltVerdict: al<aw-0.3?'You trade worse after a loss — watch for revenge entries.':al>aw+0.2?'You bounce back well after losses.':'You hold steady after losses.' }; }
+  const grades=['A','B','C','D']; const gColor={A:C.sage,B:C.peri,C:C.peach,D:C.rose}; const gCount=grades.map(g=>all.filter(t=>t.grade===g).length); const gtotal=gCount.reduce((a,b)=>a+b,0);
+  let donutSegs=[], gradeLegend=[], donutShow=false;
+  if(gtotal>0){ donutShow=true; const R=54, Cc=2*Math.PI*R; const active=grades.map((g,i)=>({g,value:gCount[i],color:gColor[g]})).filter(s=>s.value>0); const gap=active.length>1?16:0; let off=0; donutSegs=active.map(s=>{ const len=s.value/gtotal*Cc; const draw=Math.max(0.001,len-gap); const el={dash:`${draw.toFixed(2)} ${(Cc-draw).toFixed(2)}`, offset:(-off).toFixed(2), color:s.color}; off+=len; return el; }); const gd={A:'Textbook',B:'Solid',C:'Loose',D:'Broke rules'}; gradeLegend=grades.map((g,i)=>({label:'Grade '+g+' · '+gd[g], count:gCount[i], color:gColor[g]})); }
+  return { st, ...eqVals, confShow:confBars.length>0, confBars, slShow:slBars.length>0, slBars, sessionShow:sessionBars.length>1, sessionBars, dowShow:dayBars.length>1, dayBars, ...bias, ...tax, ...tilt, donutShow, donutSegs, donutTotal:gtotal, gradeLegend };
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const fieldLabel = `font:600 12px 'Hanken Grotesk'; color:oklch(0.7 0.012 75); margin-bottom:9px;`;
+const inputCss = `width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:500 14px 'Hanken Grotesk';`;
+const cardLabel = `font:700 11px 'Hanken Grotesk'; letter-spacing:.06em; color:var(--dim); text-transform:uppercase;`;
+
+function barsHTML(bars){ return bars.map(b=>`
+  <div style="display:flex; align-items:center; gap:11px; margin-bottom:12px;">
+    <span style="font:600 12px 'Hanken Grotesk'; color:var(--dim2); width:92px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(b.label)}</span>
+    <div style="flex:1; height:9px; background:var(--raised); border-radius:5px; overflow:hidden;"><div style="height:100%; border-radius:5px; width:${b.width}; background:${b.color};"></div></div>
+    <span style="display:flex; flex-direction:column; align-items:flex-end; width:66px; flex:none; line-height:1.2;"><b style="font:800 13px 'Hanken Grotesk'; color:var(--text);">${b.wr}</b><small style="font:500 10px 'JetBrains Mono'; color:var(--muted);">${esc(b.sub)}</small></span>
+  </div>`).join(''); }
+function insCard(title,sub,inner){ return `<div style="background:var(--card); border-radius:17px; padding:17px; margin-bottom:14px;"><div style="font:700 13.5px 'Hanken Grotesk'; color:oklch(0.9 0.01 80); margin-bottom:3px;">${title}</div><div style="font:500 11.5px 'Hanken Grotesk'; color:var(--muted); margin-bottom:15px;">${sub}</div>${inner}</div>`; }
+
+/* ---------- TODAY ---------- */
+function buildToday(){
+  const S=state, day=S.days[S.today]||{};
+  const todayTrades=S.trades.filter(t=>t.date===S.today).map(buildVM);
+  const rated=S.trades.filter(t=>t.date===S.today&&t.r!=null&&!isNaN(t.r));
+  const dayR=rated.reduce((s,t)=>s+t.r,0), dayW=rated.filter(t=>t.r>0).length, dayL=rated.filter(t=>t.r<0).length;
+  const nToday=S.trades.filter(t=>t.date===S.today).length;
+  const dayCount = nToday===0?'No trades yet':(nToday+' trade'+(nToday>1?'s':'')+(rated.length?' · '+dayW+'W '+dayL+'L':''));
+  const isToday=S.today===todayISO();
+  const bias=day.bias;
+  const planGrades=['A','B','C','D'].map(g=>`<button data-act="setPlanGrade" data-arg="${g}" style="width:31px; height:31px; display:grid; place-items:center; border-radius:9px; border:none; font:700 13px 'Hanken Grotesk'; background:${day.planGrade===g?gradeColor(g):C.raised}; color:${day.planGrade===g?(g==='B'?C.periInk:C.ink70):C.dim};">${g}</button>`).join('');
+  const tradesHTML = nToday===0
+    ? `<div style="padding:26px 18px; text-align:center;"><div style="font:600 14px 'Hanken Grotesk'; color:var(--muted); line-height:1.5;">No trades logged yet.<br>Paste a chart below to log your first.</div></div>`
+    : `<div style="padding:6px 18px 0;">${todayTrades.map(t=>`
+        <div data-act="openDetail" data-arg="${t.id}" style="background:var(--card); border-radius:17px; overflow:hidden; margin-bottom:11px; cursor:pointer;">
+          <div class="strip" style="height:96px; background-color:var(--raised); position:relative;">
+            ${t.thumb?`<img src="${t.thumb}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">`:''}
+            <div style="position:absolute; top:11px; left:11px;"><span style="font:800 10.5px 'Hanken Grotesk'; letter-spacing:.05em; color:var(--sage-ink); background:${t.dirBg}; padding:5px 10px; border-radius:8px;">${t.dirLabel}</span></div>
+            <div style="position:absolute; top:10px; right:11px; font:800 18px 'Hanken Grotesk'; color:${t.rColor}; letter-spacing:-.02em; background:oklch(0.18 0.006 70 / .6); padding:4px 10px; border-radius:10px;">${t.rText}</div>
+            ${t.time?`<div style="position:absolute; bottom:9px; right:12px; font:500 10px 'JetBrains Mono'; color:oklch(0.82 0.01 75); background:oklch(0.18 0.006 70 / .55); padding:2px 7px; border-radius:6px;">${esc(t.time)}</div>`:''}
+          </div>
+          <div style="padding:13px 14px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            ${t.confList.map(c=>`<span style="font:600 11.5px 'Hanken Grotesk'; color:var(--dim2); background:var(--raised); padding:5px 11px; border-radius:999px;">${esc(c)}</span>`).join('')}
+            ${t.slShow?`<span style="font:600 11.5px 'Hanken Grotesk'; color:var(--peach); background:var(--peach-glow); padding:5px 11px; border-radius:999px;">Stop · ${esc(t.slLabel)}</span>`:''}
+            ${t.gradeShow?`<span style="margin-left:auto; font:800 12px 'Hanken Grotesk'; color:${t.gradeCol}; background:var(--raised); width:25px; height:25px; display:grid; place-items:center; border-radius:8px;">${t.grade}</span>`:''}
+          </div>
+        </div>`).join('')}</div>`;
+  return `<section>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:calc(var(--safe-t) + 22px) 18px 10px;">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        <button data-act="prevDay" style="width:32px; height:32px; flex:none; border-radius:9px; background:var(--card); display:grid; place-items:center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+        <div style="min-width:0;">
+          <div style="font:700 12px/1 'Hanken Grotesk'; letter-spacing:.03em; color:var(--peri); margin-bottom:6px;">${isToday?'Today':esc(fmtWeekday(S.today))}</div>
+          <div style="font:800 22px/1 'Hanken Grotesk'; letter-spacing:-.025em; color:var(--text-bright); white-space:nowrap;">${esc(fmtDate(S.today))}</div>
+        </div>
+        <button data-act="nextDay" style="width:32px; height:32px; flex:none; border-radius:9px; background:var(--card); display:grid; place-items:center; opacity:${isToday?'.35':'1'};"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></button>
+      </div>
+      <div style="text-align:right; background:var(--card); border-radius:14px; padding:9px 14px; flex:none;">
+        <div style="font:800 20px/1 'Hanken Grotesk'; letter-spacing:-.02em; color:${rated.length?(dayR>=0?C.sage:C.rose):C.dim2};">${rated.length?fmtR(dayR):'—'}</div>
+        <div style="font:600 10px/1 'Hanken Grotesk'; color:var(--dim); margin-top:6px; letter-spacing:.03em;">${esc(dayCount)}</div>
+      </div>
+    </div>
+    <div style="padding:13px 18px 4px;">
+      <div style="background:var(--card); border-radius:17px; padding:16px;">
+        <div style="${cardLabel} margin-bottom:12px;">Pre-market</div>
+        <div style="display:flex; gap:7px; margin-bottom:13px;">
+          <button data-act="setBias" data-arg="long" style="${seg(bias==='long',C.sage,C.sageInk)}">▲ Long</button>
+          <button data-act="setBias" data-arg="short" style="${seg(bias==='short',C.rose,C.roseInk)}">▼ Short</button>
+          <button data-act="setBias" data-arg="neutral" style="${seg(bias==='neutral',C.dim2,C.ink70)}">Neutral</button>
+        </div>
+        <div style="margin-bottom:10px;"><input type="text" data-input="day:dol" value="${esc(day.dol||'')}" placeholder="Draw on liquidity (DOL)…" style="${inputCss}"></div>
+        <div style="margin-bottom:10px;"><input type="text" data-input="day:feel" value="${esc(day.feel||'')}" placeholder="How are you feeling at the open?" style="${inputCss}"></div>
+        <textarea data-input="day:plan" rows="2" placeholder="Today's plan — what am I watching for?" style="${inputCss} line-height:1.5;">${esc(day.plan||'')}</textarea>
+      </div>
+    </div>
+    <div style="padding:13px 18px 0;"><div style="${cardLabel}">Trades</div></div>
+    ${tradesHTML}
+    <div style="padding:8px 18px 14px;">
+      <button data-act="openSheet" style="width:100%; display:flex; align-items:center; justify-content:center; gap:9px; padding:16px; border-radius:16px; background:var(--peri); box-shadow:0 8px 22px var(--peri-glow);">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--peri-ink)" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+        <span style="font:700 14px 'Hanken Grotesk'; color:var(--peri-ink);">Add trade — paste a chart</span>
+      </button>
+    </div>
+    <div style="padding:2px 18px 18px;">
+      <div style="background:var(--card); border-radius:17px; padding:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px;">
+          <span style="${cardLabel}">Did I follow my plan?</span>
+          <div style="display:flex; gap:6px;">${planGrades}</div>
+        </div>
+        <textarea data-input="day:eodNote" rows="3" placeholder="End-of-day reflection — what's the lesson?" style="${inputCss} line-height:1.6;">${esc(day.eodNote||'')}</textarea>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ---------- JOURNAL ---------- */
+function buildJournal(){
+  const S=state;
+  const filters=[{id:'all',label:'All'},{id:'live',label:'Live'},{id:'forward',label:'Forward'},{id:'win',label:'Wins'},{id:'loss',label:'Losses'},{id:'A',label:'A grade'}];
+  const jpass=t=>{ switch(S.jFilter){ case 'live':return (t.mode||'live')==='live'; case 'forward':return t.mode==='forward'; case 'win':return t.r>0; case 'loss':return t.r<0; case 'A':return t.grade==='A'; default:return true; } };
+  const jlist=S.trades.filter(jpass);
+  const byDate={}; jlist.forEach(t=>{ (byDate[t.date]=byDate[t.date]||[]).push(t); });
+  const days=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+  const biasMap={long:'Long bias',short:'Short bias',neutral:'Neutral'};
+  const filterRow=filters.map(f=>`<button data-act="setFilter" data-arg="${f.id}" style="flex:none; padding:9px 15px; border-radius:999px; border:none; white-space:nowrap; font:600 13px 'Hanken Grotesk'; background:${S.jFilter===f.id?C.peri:C.card}; color:${S.jFilter===f.id?C.periInk:C.dim2};">${f.label}</button>`).join('');
+  let body;
+  if(jlist.length===0){
+    const empT=S.trades.length===0?'No trades yet':'Nothing matches';
+    const empS=S.trades.length===0?'Log your first trade from the Today screen — every entry, on the record.':'No trades match this filter.';
+    body=`<div style="padding:50px 30px; text-align:center;"><div style="font:700 17px 'Hanken Grotesk'; color:oklch(0.74 0.012 75); margin-bottom:7px;">${empT}</div><div style="font:500 13.5px/1.55 'Hanken Grotesk'; color:oklch(0.58 0.012 75);">${empS}</div></div>`;
+  } else {
+    body=`<div style="padding:0 18px;">${days.map(date=>{
+      const tr=byDate[date].slice().sort((a,b)=>(b.time||'').localeCompare(a.time||'')||(b.createdAt||0)-(a.createdAt||0));
+      const rated=tr.filter(t=>t.r!=null&&!isNaN(t.r)); const tot=rated.reduce((s,t)=>s+t.r,0);
+      const dr=S.days[date]||{}; const biasShow=!!biasMap[dr.bias];
+      const biasCol=dr.bias==='long'?C.sage:dr.bias==='short'?C.rose:C.dim2;
+      return `<div style="margin-bottom:18px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 2px 10px;">
+          <div style="display:flex; align-items:center; gap:9px;"><span style="font:700 13px 'Hanken Grotesk'; color:oklch(0.88 0.01 80);">${esc(fmtDateLong(date))}</span>${biasShow?`<span style="font:600 10px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:${biasCol}; background:var(--card); padding:3px 8px; border-radius:6px;">${biasMap[dr.bias]}</span>`:''}</div>
+          <span style="font:800 15px 'Hanken Grotesk'; letter-spacing:-.02em; color:${rated.length?(tot>=0?C.sage:C.rose):C.dim2};">${rated.length?fmtR(tot):'—'}</span>
+        </div>
+        ${tr.map(buildVM).map(t=>`
+          <div data-act="openDetail" data-arg="${t.id}" style="background:var(--card); border-radius:14px; padding:11px 12px; display:flex; align-items:center; gap:12px; margin-bottom:8px; cursor:pointer;">
+            <div class="strip" style="width:52px; height:42px; flex:none; border-radius:10px; background-color:var(--raised); position:relative; overflow:hidden;">${t.thumb?`<img src="${t.thumb}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">`:''}</div>
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;"><span style="font:800 10px 'Hanken Grotesk'; letter-spacing:.05em; color:var(--sage-ink); background:${t.dirBg}; padding:3px 8px; border-radius:6px;">${t.dirLabel}</span>${t.time?`<span style="font:500 10.5px 'JetBrains Mono'; color:var(--dim);">${esc(t.time)}</span>`:''}${t.fwd?`<span style="font:700 9px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:var(--peach); background:var(--peach-glow); padding:3px 6px; border-radius:5px;">Fwd</span>`:''}</div>
+              <div style="font:600 11.5px 'Hanken Grotesk'; color:oklch(0.64 0.012 75); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.summary)}</div>
+            </div>
+            <div style="text-align:right; flex:none;"><div style="font:800 16px 'Hanken Grotesk'; color:${t.rColor}; letter-spacing:-.02em;">${t.rText}</div>${t.gradeShow?`<div style="font:700 10px 'Hanken Grotesk'; color:${t.gradeCol}; margin-top:3px;">grade ${t.grade}</div>`:''}</div>
+          </div>`).join('')}
+      </div>`;
+    }).join('')}</div>`;
+  }
+  return `<section>
+    <div style="padding:calc(var(--safe-t) + 22px) 18px 10px;"><div style="font:800 22px/1 'Hanken Grotesk'; letter-spacing:-.025em; color:var(--text-bright);">Journal</div></div>
+    <div class="noscroll" style="display:flex; gap:8px; overflow-x:auto; padding:4px 18px 12px;">${filterRow}</div>
+    ${body}
+  </section>`;
+}
+
+/* ---------- INSIGHTS ---------- */
+function buildInsights(){
+  const S=state;
+  const scopes=[{id:'all',label:'All'},{id:'live',label:'Live'},{id:'forward',label:'Forward'}];
+  const scopeRow=scopes.map(sc=>`<button data-act="setScope" data-arg="${sc.id}" style="flex:1; text-align:center; padding:10px 0; border-radius:11px; border:none; font:600 13px 'Hanken Grotesk'; background:${S.insScope===sc.id?C.peri:C.card}; color:${S.insScope===sc.id?C.periInk:C.dim2};">${sc.label}</button>`).join('');
+  const head=`<div style="padding:calc(var(--safe-t) + 22px) 0 10px;"><div style="font:800 22px/1 'Hanken Grotesk'; letter-spacing:-.025em; color:var(--text-bright);">Insights</div></div><div style="display:flex; gap:8px; margin-bottom:14px;">${scopeRow}</div>`;
+  let inner;
+  if(S.trades.length===0){
+    inner=`<div style="background:var(--card); border-radius:17px; padding:46px 26px; text-align:center;"><div style="font:700 16px 'Hanken Grotesk'; color:oklch(0.74 0.012 75); margin-bottom:7px;">No data yet</div><div style="font:500 13px/1.55 'Hanken Grotesk'; color:oklch(0.58 0.012 75);">Log a few trades and your edge — and your psychology — start showing up here.</div></div>`;
+  } else if(!scopedTrades().length){
+    inner=`<div style="background:var(--card); border-radius:17px; padding:46px 26px; text-align:center;"><div style="font:700 16px 'Hanken Grotesk'; color:oklch(0.74 0.012 75); margin-bottom:7px;">Nothing in this scope</div><div style="font:500 13px/1.55 'Hanken Grotesk'; color:oklch(0.58 0.012 75);">No ${esc(S.insScope)} trades yet. Switch scope, or log one.</div></div>`;
+  } else {
+    const v=computeInsights();
+    const stats=`<div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:14px;">
+      <div style="grid-column:1/-1; background:var(--card); border-radius:17px; padding:18px;"><div style="font:800 40px/1 'Hanken Grotesk'; letter-spacing:-.04em; color:${v.st.expColor};">${v.st.expText}</div><div style="font:500 12px 'Hanken Grotesk'; color:var(--dim); margin-top:7px;">Expectancy · <span style="color:var(--dim2); font-weight:600;">avg R per trade</span></div></div>
+      <div style="background:var(--card); border-radius:17px; padding:15px 16px;"><div style="font:800 26px/1 'Hanken Grotesk'; letter-spacing:-.03em; color:oklch(0.93 0.01 80);">${v.st.wrText}</div><div style="font:500 11.5px 'Hanken Grotesk'; color:var(--dim); margin-top:5px;">${esc(v.st.wrSub)}</div></div>
+      <div style="background:var(--card); border-radius:17px; padding:15px 16px;"><div style="font:800 26px/1 'Hanken Grotesk'; letter-spacing:-.03em; color:${v.st.totalColor};">${v.st.totalText}</div><div style="font:500 11.5px 'Hanken Grotesk'; color:var(--dim); margin-top:5px;">${esc(v.st.totalSub)}</div></div>
+    </div>`;
+    const eq=v.eqShow?insCard('Equity curve','Cumulative R, in order — the shape beats any one trade.',`<svg viewBox="0 0 560 150" preserveAspectRatio="none" style="display:block; width:100%; height:auto;"><line x1="8" y1="${v.eqZeroY}" x2="552" y2="${v.eqZeroY}" stroke="var(--faint)" stroke-width="1" stroke-dasharray="2 5"></line><path d="${v.eqArea}" fill="${v.eqCol}" fill-opacity="0.14"></path><path d="${v.eqLine}" fill="none" stroke="${v.eqCol}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></path><circle cx="${v.eqLastX}" cy="${v.eqLastY}" r="3.6" fill="${v.eqCol}"></circle></svg>`):'';
+    const conf=v.confShow?insCard('Confluence win rate','Which reads actually win — ranked. Mind the sample (Nt).',barsHTML(v.confBars)):'';
+    const slc=v.slShow?insCard('Stop placement','Where your stop survives best — win rate &amp; avg R by placement.',barsHTML(v.slBars)):'';
+    const bias=v.biasShow?insCard('Bias adherence','With your daily bias vs against it. '+esc(v.biasVerdict),`<div style="display:flex; gap:11px;"><div style="flex:1; background:var(--raised); border-radius:13px; padding:14px;"><div style="font:800 22px/1 'Hanken Grotesk'; color:var(--sage); letter-spacing:-.02em;">${v.biasWithAvg}</div><div style="font:500 11px 'Hanken Grotesk'; color:var(--dim); margin-top:6px;">With bias · ${esc(v.biasWithSub)}</div></div><div style="flex:1; background:var(--raised); border-radius:13px; padding:14px;"><div style="font:800 22px/1 'Hanken Grotesk'; color:var(--rose); letter-spacing:-.02em;">${v.biasCounterAvg}</div><div style="font:500 11px 'Hanken Grotesk'; color:var(--dim); margin-top:6px;">Counter · ${esc(v.biasCounterSub)}</div></div></div>`):'';
+    const sess=v.sessionShow?insCard('Time of day','When your edge actually shows up.',barsHTML(v.sessionBars)):'';
+    const dow=v.dowShow?insCard('Day of week','Spot the weekday worth dropping.',barsHTML(v.dayBars)):'';
+    const tax=v.taxShow?insCard('Discipline tax','What loose execution costs you, in R per trade.',`<div style="display:flex; border-radius:13px; overflow:hidden; background:var(--raised);"><div style="flex:1; padding:14px 10px; text-align:center;"><div style="font:800 20px 'Hanken Grotesk'; color:var(--sage); letter-spacing:-.02em;">${v.taxGood}</div><div style="font:500 10.5px 'Hanken Grotesk'; color:var(--dim); margin-top:5px;">A / B process (${v.taxGoodN})</div></div><div style="width:1px; background:oklch(0.36 0.008 70);"></div><div style="flex:1; padding:14px 10px; text-align:center;"><div style="font:800 20px 'Hanken Grotesk'; color:var(--rose); letter-spacing:-.02em;">${v.taxLoose}</div><div style="font:500 10.5px 'Hanken Grotesk'; color:var(--dim); margin-top:5px;">C / D process (${v.taxLooseN})</div></div><div style="width:1px; background:oklch(0.36 0.008 70);"></div><div style="flex:1; padding:14px 10px; text-align:center;"><div style="font:800 20px 'Hanken Grotesk'; color:var(--peach); letter-spacing:-.02em;">${v.taxGap}</div><div style="font:500 10.5px 'Hanken Grotesk'; color:var(--dim); margin-top:5px;">gap / trade</div></div></div>`):'';
+    const tilt=v.tiltShow?insCard('Tilt check',esc(v.tiltVerdict),`<div style="display:flex; gap:11px;"><div style="flex:1; background:var(--raised); border-radius:13px; padding:14px;"><div style="font:800 22px/1 'Hanken Grotesk'; color:var(--sage); letter-spacing:-.02em;">${v.tiltAfterWin}</div><div style="font:500 11px 'Hanken Grotesk'; color:var(--dim); margin-top:6px;">After a win · ${esc(v.tiltWinN)}</div></div><div style="flex:1; background:var(--raised); border-radius:13px; padding:14px;"><div style="font:800 22px/1 'Hanken Grotesk'; color:${v.tiltLossColor}; letter-spacing:-.02em;">${v.tiltAfterLoss}</div><div style="font:500 11px 'Hanken Grotesk'; color:var(--dim); margin-top:6px;">After a loss · ${esc(v.tiltLossN)}</div></div></div>`):'';
+    let donut='';
+    if(v.donutShow){
+      const segs=v.donutSegs.map(s=>`<circle cx="70" cy="70" r="54" fill="none" stroke="${s.color}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${s.dash}" stroke-dashoffset="${s.offset}" transform="rotate(-90 70 70)"></circle>`).join('');
+      const legend=v.gradeLegend.map(g=>`<div style="display:flex; align-items:center; gap:9px;"><span style="width:9px; height:9px; border-radius:3px; flex:none; background:${g.color};"></span><span style="font:600 12px 'Hanken Grotesk'; color:var(--dim2); flex:1;">${esc(g.label)}</span><span style="font:700 12.5px 'Hanken Grotesk'; color:oklch(0.9 0.01 80);">${g.count}</span></div>`).join('');
+      donut=insCard('Process grades','How you graded execution — apart from P&amp;L.',`<div style="display:flex; align-items:center; gap:18px;"><svg viewBox="0 0 140 140" style="width:130px; flex:none;"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--raised)" stroke-width="13"></circle>${segs}<text x="70" y="66" text-anchor="middle" dominant-baseline="central" style="font:800 26px 'Hanken Grotesk'; fill:oklch(0.93 0.01 80);">${v.donutTotal}</text><text x="70" y="88" text-anchor="middle" style="font:600 9.5px 'Hanken Grotesk'; letter-spacing:.06em; fill:var(--dim);">GRADED</text></svg><div style="flex:1; display:flex; flex-direction:column; gap:9px;">${legend}</div></div>`);
+    }
+    const backup=`<div style="text-align:center; margin:4px 0 8px;"><button data-act="openData" style="font:600 13px 'Hanken Grotesk'; color:oklch(0.74 0.012 75); background:var(--card); border:none; border-radius:999px; padding:10px 18px;">Backup &amp; data</button></div>`;
+    inner = stats+eq+conf+slc+bias+sess+dow+tax+tilt+donut+backup;
+  }
+  return `<section style="padding:0 18px;">${head}${inner}</section>`;
+}
+
+/* ---------- main / nav ---------- */
+function renderMain(){ const v=state.view; $('#main').innerHTML = v==='today'?buildToday():v==='journal'?buildJournal():buildInsights(); }
+function renderTodayView(){ renderMain(); }
+function renderNav(){ const v=state.view; $('#nav').innerHTML=`<div style="position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--safe-b) + 18px); z-index:50; display:flex; gap:4px; padding:5px; background:oklch(0.248 0.008 70 / .9); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid var(--border); border-radius:999px; box-shadow:0 12px 40px rgba(0,0,0,.4);">
+  <button data-act="goToday" style="${navStyle(v==='today')}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg><span>Today</span></button>
+  <button data-act="goJournal" style="${navStyle(v==='journal')}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"></path></svg><span>Journal</span></button>
+  <button data-act="goInsights" style="${navStyle(v==='insights')}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 16v-5M13 16V8M18 16v-9"></path></svg><span>Insights</span></button>
+</div>`; }
+
+/* ---------- sheet ---------- */
+function renderSheet(){
+  const root=$('#sheet-root');
+  if(!state.sheetOpen){ root.innerHTML=''; return; }
+  const f=state.sheet;
+  const rPresets=[{v:-1,label:'−1'},{v:0,label:'BE'},{v:1,label:'+1'},{v:2,label:'+2'},{v:3,label:'+3'}].map(p=>`<button data-act="setR" data-arg="${p.v}" style="${chip(Number(f.r)===p.v, p.v>0?C.sage:p.v<0?C.rose:C.peach, p.v>0?C.sageInk:p.v<0?C.roseInk:C.peachInk)}">${p.label}</button>`).join('');
+  const confChips=(state.settings.confluences||[]).map(c=>`<button data-act="toggleConf" data-arg="${c.id}" style="${chip(!!f.conf[c.id], C.peri)}">${esc(c.label)}</button>`).join('');
+  const slChips=(state.settings.stops||[]).map(c=>`<button data-act="setStop" data-arg="${c.id}" style="${chip(f.sl===c.id, C.peach, C.peachInk)}">${esc(c.label)}</button>`).join('');
+  const gradeBtns=[{g:'A',d:'Textbook'},{g:'B',d:'Solid'},{g:'C',d:'Loose'},{g:'D',d:'Broke'}].map(x=>`<button data-act="setGrade" data-arg="${x.g}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:11px 0; border-radius:13px; border:1px solid ${f.grade===x.g?gradeColor(x.g):'transparent'}; background:${f.grade===x.g?gradeColor(x.g):C.raised}; color:${f.grade===x.g?(x.g==='B'?C.periInk:C.ink70):C.dim2}; transition:all .12s;"><span style="font:800 21px 'Hanken Grotesk'; line-height:1;">${x.g}</span><span style="font:600 9px 'Hanken Grotesk'; text-transform:uppercase; letter-spacing:.03em; margin-top:3px;">${x.d}</span></button>`).join('');
+  const targetChips=(state.settings.targets||[]).map(c=>`<button data-act="setTarget" data-arg="${c.id}" style="${chip(f.target===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
+  const tpChips=(state.settings.tps||[]).map(c=>`<button data-act="setTp" data-arg="${c.id}" style="${chip(f.tp===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
+  const exitChips=EXIT_OPTS.map(c=>`<button data-act="setExit" data-arg="${c.id}" style="${chip(f.exit===c.id, C.peri)}">${esc(c.label)}</button>`).join('');
+  const addBtn=act=>`<button data-act="${act}" style="display:inline-flex; align-items:center; gap:5px; padding:8px 13px; border-radius:999px; background:transparent; border:1px dashed var(--faint); font:600 13px 'Hanken Grotesk'; color:oklch(0.7 0.012 75);"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Add</button>`;
+  const addInput=(id,spec,enter,val)=>`<input id="${id}" type="text" data-input="${spec}" data-enter="${enter}" value="${esc(val)}" placeholder="New + Enter" style="min-width:130px; background:var(--raised); border:1px solid var(--peri); border-radius:999px; padding:8px 14px; color:oklch(0.92 0.01 80); font:600 13px 'Hanken Grotesk';">`;
+  const photoBlock = f.photoFull
+    ? `<div style="position:relative; border-radius:14px; overflow:hidden; margin-bottom:16px; background:var(--deep);"><img src="${f.photoFull}" alt="" style="display:block; width:100%; max-height:300px; object-fit:contain;"><button data-act="removePhoto" style="position:absolute; top:9px; right:9px; width:32px; height:32px; border-radius:9px; background:rgba(10,10,12,.7); border:1px solid var(--faint); display:grid; place-items:center; backdrop-filter:blur(5px);"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button></div>`
+    : `<div id="drop-zone" style="border:1.5px dashed var(--faint); border-radius:14px; padding:18px 16px; text-align:center; margin-bottom:16px; background:oklch(0.21 0.006 70);"><div style="display:flex; gap:9px; justify-content:center; margin-bottom:11px;"><button data-act="pickCam" style="display:inline-flex; align-items:center; gap:7px; padding:10px 15px; border-radius:11px; background:var(--raised); font:600 13px 'Hanken Grotesk'; color:oklch(0.9 0.01 80);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--peri)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>Photo</button><button data-act="pickUp" style="display:inline-flex; align-items:center; gap:7px; padding:10px 15px; border-radius:11px; background:var(--raised); font:600 13px 'Hanken Grotesk'; color:oklch(0.9 0.01 80);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--peri)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Upload</button></div><div style="font:500 12px 'Hanken Grotesk'; color:oklch(0.58 0.012 75); line-height:1.5;">Drop a chart, or paste a screenshot <span style="font:600 11px 'JetBrains Mono'; background:var(--raised); padding:1px 6px; border-radius:5px;">⌘V</span></div></div>`;
+  const moreBlock = state.moreOpen ? `<div style="padding:4px 0 6px;">
+    <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:8px;">Time (ET)</div><div style="display:flex; flex-wrap:wrap; gap:7px; margin-bottom:9px;">${['9:30 AM','9:45 AM','10:00 AM','10:30 AM','11:00 AM'].map(tt=>`<button data-act="setTime" data-arg="${tt}" style="${chip(f.time===tt, C.peri)}">${tt.replace(/ [AP]M$/,'')}</button>`).join('')}</div><input type="text" inputmode="numeric" data-input="sheet:time" data-time="1" value="${esc(f.time||'')}" placeholder="or type — 930 becomes 9:30 AM" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:600 14px 'JetBrains Mono';"></div>
+    <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Target</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${targetChips}</div></div>
+    <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Exit reason</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${exitChips}</div></div>
+    <div><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">What happened?</div><textarea data-input="sheet:note" rows="3" placeholder="How did it play out, and why?" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:500 14px/1.6 'Hanken Grotesk';">${esc(f.note||'')}</textarea></div>
+  </div>` : '';
+  const inner = `
+      <div style="position:sticky; top:0; z-index:3; background:var(--sheet); padding:10px 18px 12px;">
+        <div style="width:38px; height:4px; border-radius:3px; background:var(--faint); margin:0 auto 12px;"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="font:800 19px 'Hanken Grotesk'; letter-spacing:-.02em; color:var(--text-bright);">${state.editingId?'Edit trade':'Log trade'}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; gap:3px; background:var(--raised); border-radius:9px; padding:3px;"><button data-act="setMode" data-arg="live" style="${modeBtn(f.mode!=='forward',C.peri,C.periInk)}">Live</button><button data-act="setMode" data-arg="forward" style="${modeBtn(f.mode==='forward',C.peach,C.peachInk)}">Forward</button></div>
+            <button data-act="closeSheet" style="width:34px; height:34px; border-radius:10px; background:var(--raised); display:grid; place-items:center;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:4px 18px 22px;">
+        ${photoBlock}
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Direction</div><div style="display:flex; gap:9px;"><button data-act="setDir" data-arg="long" style="${bigChip(f.direction==='long',C.sage,C.sageInk)}">▲ Long</button><button data-act="setDir" data-arg="short" style="${bigChip(f.direction==='short',C.rose,C.roseInk)}">▼ Short</button></div></div>
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Result (R)</div><div style="display:flex; gap:7px; margin-bottom:9px;">${rPresets}</div><div style="display:flex; align-items:center; gap:9px;"><button data-act="rDown" style="width:46px; height:46px; flex:none; border-radius:12px; background:var(--raised); font:700 22px 'Hanken Grotesk'; color:oklch(0.8 0.012 75);">−</button><input type="number" step="0.25" inputmode="decimal" data-input="sheet:r" value="${(f.r===null||f.r===undefined)?'':f.r}" placeholder="e.g. 3, -1, 2.5" style="flex:1; min-width:0; text-align:center; background:var(--raised); border:1px solid transparent; border-radius:12px; padding:12px; color:oklch(0.93 0.01 80); font:700 17px 'JetBrains Mono';"><button data-act="rUp" style="width:46px; height:46px; flex:none; border-radius:12px; background:var(--raised); font:700 22px 'Hanken Grotesk'; color:oklch(0.8 0.012 75);">+</button></div></div>
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Confluences</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${confChips}${state.adding.conf?addInput('conf-add-inp','add:conf','addConf',state.addVal.conf):''}${addBtn('toggleConfAdd')}</div></div>
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Stop placement</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${slChips}${state.adding.stop?addInput('stop-add-inp','add:stop','addStop',state.addVal.stop):''}${addBtn('toggleStopAdd')}</div></div>
+        <div style="margin-bottom:16px;"><div style="${fieldLabel}">Take profit</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${tpChips}${state.adding.tp?addInput('tp-add-inp','add:tp','addTp',state.addVal.tp):''}${addBtn('toggleTpAdd')}</div></div>
+        <div style="margin-bottom:16px;"><div style="font:600 12px 'Hanken Grotesk'; color:oklch(0.7 0.012 75); margin-bottom:9px;">Process grade <span style="color:oklch(0.55 0.012 75); font-weight:500;">· grade execution, not P&amp;L</span></div><div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">${gradeBtns}</div></div>
+        <button data-act="toggleMore" style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; padding:12px 2px; background:none; font:600 13px 'Hanken Grotesk'; color:oklch(0.66 0.012 75);">More detail (optional)<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:${state.moreOpen?'rotate(180deg)':'none'};"><path d="M6 9l6 6 6-6"></path></svg></button>
+        ${moreBlock}
+        <button data-act="saveTrade" style="width:100%; margin-top:14px; padding:16px; border-radius:14px; background:var(--peri); font:700 15px 'Hanken Grotesk'; color:var(--peri-ink); box-shadow:0 8px 22px var(--peri-glow);">${state.editingId?'Save changes':'Log trade'}</button>
+      </div>`;
+  if(!$('#sheet-card')){
+    root.innerHTML=`<div data-act="noop" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;"><div id="sheet-card" data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:92vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);"><div id="sheet-inner"></div></div></div>`;
+  }
+  $('#sheet-inner').innerHTML = inner;
+  if(!f.photoFull){ const dz=$('#drop-zone'); if(dz){ const st=e=>e.preventDefault(); dz.addEventListener('dragover',st); dz.addEventListener('dragenter',st); dz.addEventListener('drop',e=>{ e.preventDefault(); const fl=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(fl) handleImage(fl); }); } }
+  if(state.adding.conf){ const i=$('#conf-add-inp'); if(i) i.focus(); }
+  if(state.adding.stop){ const i=$('#stop-add-inp'); if(i) i.focus(); }
+  if(state.adding.tp){ const i=$('#tp-add-inp'); if(i) i.focus(); }
+}
+
+/* ---------- detail ---------- */
+function renderDetail(){
+  const root=$('#detail-root');
+  if(!state.detailId){ root.innerHTML=''; return; }
+  const t=state.trades.find(x=>x.id===state.detailId); if(!t){ root.innerHTML=''; return; }
+  const conf=Object.keys(t.conf||{}).filter(k=>t.conf[k]).map(k=>confLabel(k));
+  const exitMap=Object.fromEntries(EXIT_OPTS.map(e=>[e.id,e.label]));
+  const rColor= t.r>0?C.sage:t.r<0?C.rose:C.dim2;
+  const photo = state.detailPhoto ? `<div style="border-radius:14px; overflow:hidden; margin-bottom:15px; background:var(--deep);"><img data-act="zoomPhoto" src="${state.detailPhoto}" alt="" style="display:block; width:100%; max-height:50vh; object-fit:contain; cursor:zoom-in;"></div>` : '';
+  const cell=(lbl,val,col)=>`<div style="background:var(--raised); border-radius:12px; padding:11px 13px;"><div style="font:600 10px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;">${lbl}</div><div style="font:700 14px 'Hanken Grotesk'; color:${col||'oklch(0.86 0.01 80)'};">${val}</div></div>`;
+  const confSec = conf.length?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Confluences</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${conf.map(c=>`<span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(c)}</span>`).join('')}</div></div>`:'';
+  const exitSec = t.exit?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Exit</div><span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(exitMap[t.exit]||t.exit)}</span></div>`:'';
+  const targetSec = t.target?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">Target</div><span style="font:600 12px 'Hanken Grotesk'; color:oklch(0.84 0.012 80); background:var(--raised); padding:6px 12px; border-radius:999px;">${esc(targetLabel(t.target))}</span></div>`:'';
+  const noteTxt=t.note||t.result||'';
+  const noteSec = noteTxt?`<div style="margin-bottom:15px;"><div style="font:700 10.5px 'Hanken Grotesk'; letter-spacing:.05em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:9px;">What happened?</div><div style="font:500 13.5px/1.65 'Hanken Grotesk'; color:oklch(0.86 0.01 80); background:var(--raised); border-radius:12px; padding:13px 14px; white-space:pre-wrap;">${esc(noteTxt)}</div></div>`:'';
+  const delStyle=`flex:${state.deleteArmed?'1.4':'1'}; padding:13px; border-radius:12px; border:1px solid var(--rose); background:${state.deleteArmed?'var(--rose-glow)':'transparent'}; font:700 13.5px 'Hanken Grotesk'; color:var(--rose); display:inline-flex; align-items:center; justify-content:center; gap:8px;`;
+  root.innerHTML=`<div data-act="closeDetail" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;">
+    <div data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:90vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);">
+      <div style="position:sticky; top:0; background:var(--sheet); padding:10px 18px 12px; z-index:2;">
+        <div style="width:38px; height:4px; border-radius:3px; background:var(--faint); margin:0 auto 12px;"></div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div><div style="font:800 20px 'Hanken Grotesk'; letter-spacing:-.02em; color:var(--text-bright);">${(t.direction==='long'?'Long':'Short')+(t.mode==='forward'?' · Forward':'')}</div><div style="font:500 12px 'Hanken Grotesk'; color:var(--dim); margin-top:3px;">${esc(fmtDateLong(t.date)+(t.time?' · '+t.time+' ET':''))}</div></div>
+          <button data-act="closeDetail" style="width:34px; height:34px; border-radius:10px; background:var(--raised); display:grid; place-items:center; flex:none;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
+        </div>
+      </div>
+      <div style="padding:2px 18px 24px;">
+        ${photo}
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+          <div style="background:var(--raised); border-radius:12px; padding:11px 13px;"><div style="font:600 10px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;">Result</div><div style="font:800 16px 'JetBrains Mono'; color:${rColor};">${fmtR(t.r)}</div></div>
+          ${cell('Process', t.grade?'Grade '+t.grade:'—', gradeColor(t.grade))}
+          ${cell('Stop', t.sl?esc(stopLabel(t.sl)):'—')}
+          ${cell('Take profit', t.tp?esc(tpLabel(t.tp)):'—')}
+        </div>
+        ${confSec}${targetSec}${exitSec}${noteSec}
+        <div style="display:flex; gap:11px; margin-top:6px;">
+          <button data-act="editDetail" style="flex:1; padding:13px; border-radius:12px; background:var(--raised); font:700 13.5px 'Hanken Grotesk'; color:oklch(0.86 0.01 80); display:inline-flex; align-items:center; justify-content:center; gap:8px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit</button>
+          <button data-act="deleteDetail" style="${delStyle}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>${state.deleteArmed?'Tap again':'Delete'}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- data modal ---------- */
+function renderData(){
+  const root=$('#data-root');
+  if(!state.dataOpen){ root.innerHTML=''; return; }
+  const mk=(kind,title,ph)=>{ const items=(state.settings[kind]||[]).map(c=>`<span style="display:inline-flex; align-items:center; gap:7px; font:600 12px 'Hanken Grotesk'; color:oklch(0.82 0.012 80); background:var(--raised); padding:6px 8px 6px 12px; border-radius:999px;">${esc(c.label)}<button data-act="removeList" data-arg="${kind}|${c.id}" style="width:18px; height:18px; border-radius:5px; background:none; color:var(--dim); font:700 15px/1 'Hanken Grotesk'; display:grid; place-items:center;">×</button></span>`).join('');
+    return `<div style="margin-bottom:16px;"><div style="font:600 12px 'Hanken Grotesk'; color:var(--dim2); margin-bottom:9px;">${title}</div><div style="display:flex; flex-wrap:wrap; gap:7px; margin-bottom:9px;">${items}</div><div style="display:flex; gap:8px;"><input type="text" data-input="manage:${kind}" data-enter="manage:${kind}" value="${esc(state.manageVal[kind]||'')}" placeholder="${ph}" style="flex:1; min-width:0; background:var(--raised); border:1px solid transparent; border-radius:10px; padding:9px 12px; color:oklch(0.9 0.01 80); font:600 13px 'Hanken Grotesk';"><button data-act="addList" data-arg="${kind}" style="flex:none; padding:0 16px; border-radius:10px; background:var(--border); font:700 13px 'Hanken Grotesk'; color:oklch(0.88 0.01 80);">Add</button></div></div>`; };
+  const importBlock = state.importOpen ? `<div style="margin-bottom:18px;"><div style="font:600 12px 'Hanken Grotesk'; color:oklch(0.66 0.012 75); margin-bottom:8px;">Paste a Tape backup (JSON). Replaces all current data.</div><textarea data-input="importText" rows="5" placeholder='{"app":"tape","trades":[...]}' style="width:100%; background:var(--deep); border:1px solid var(--border); border-radius:12px; padding:12px; color:oklch(0.86 0.01 80); font:400 12px/1.5 'JetBrains Mono';">${esc(state.importText)}</textarea><button data-act="doImport" style="width:100%; margin-top:9px; padding:12px; border-radius:11px; background:var(--peri); font:700 13px 'Hanken Grotesk'; color:var(--peri-ink);">Replace &amp; import</button></div>` : '';
+  root.innerHTML=`<div data-act="closeData" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;">
+    <div data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:90vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);">
+      <div style="position:sticky; top:0; background:var(--sheet); padding:10px 18px 12px; z-index:2;">
+        <div style="width:38px; height:4px; border-radius:3px; background:var(--faint); margin:0 auto 12px;"></div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div><div style="font:800 20px 'Hanken Grotesk'; letter-spacing:-.02em; color:var(--text-bright);">Data &amp; lists</div><div style="font:500 12px 'Hanken Grotesk'; color:var(--dim); margin-top:3px;">${HAS_CLAUDE?'Stored in this workspace.':'Stored locally in your browser.'}</div></div>
+          <button data-act="closeData" style="width:34px; height:34px; border-radius:10px; background:var(--raised); display:grid; place-items:center; flex:none;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="oklch(0.7 0.012 75)" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
+        </div>
+      </div>
+      <div style="padding:2px 18px 24px;">
+        <div style="display:flex; gap:11px; margin-bottom:18px;">
+          <button data-act="exportJSON" style="flex:1; padding:13px; border-radius:12px; background:var(--raised); font:700 13px 'Hanken Grotesk'; color:oklch(0.86 0.01 80); display:inline-flex; align-items:center; justify-content:center; gap:7px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Export</button>
+          <button data-act="toggleImport" style="flex:1; padding:13px; border-radius:12px; background:var(--raised); font:700 13px 'Hanken Grotesk'; color:oklch(0.86 0.01 80); display:inline-flex; align-items:center; justify-content:center; gap:7px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Import</button>
+        </div>
+        ${importBlock}
+        <div style="border-top:1px solid var(--border-soft); padding-top:16px;">
+          <div style="font:700 12px 'Hanken Grotesk'; letter-spacing:.04em; text-transform:uppercase; color:oklch(0.66 0.012 75); margin-bottom:12px;">Manage lists</div>
+          ${mk('confluences','Confluences','New confluence')}
+          ${mk('stops','Stop placements','New stop placement')}
+          ${mk('tps','Take profit','New take-profit level')}
+          ${mk('targets','Targets','New target')}
+        </div>
+        <div style="font:500 11px/1.55 'Hanken Grotesk'; color:oklch(0.55 0.012 75); margin-top:8px;">Export includes your screenshots — it's a full backup. Keep a copy before clearing your browser.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- lightbox / toast ---------- */
+function renderLightbox(){ const root=$('#lightbox-root'); if(!state.lightboxSrc){ root.innerHTML=''; return; } root.innerHTML=`<div data-act="closeLightbox" style="position:fixed; inset:0; z-index:200; background:rgba(5,5,7,.95); display:flex; align-items:center; justify-content:center; padding:20px; animation:tpFade .2s;"><img src="${state.lightboxSrc}" alt="" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:10px;"><button data-act="closeLightbox" style="position:fixed; top:18px; right:18px; width:42px; height:42px; border-radius:12px; background:var(--raised); border:1px solid var(--faint); display:grid; place-items:center;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button></div>`; }
+function renderToast(){ const root=$('#toast-root'); if(!state.toast){ root.innerHTML=''; return; } root.innerHTML=`<div style="position:fixed; left:50%; bottom:calc(var(--safe-b) + 90px); transform:translateX(-50%); z-index:300; background:oklch(0.32 0.008 70); border:1px solid ${state.toast.err?C.rose:C.peri}; color:oklch(0.93 0.01 80); padding:12px 18px; border-radius:999px; font:600 13.5px 'Hanken Grotesk'; box-shadow:0 12px 40px rgba(0,0,0,.5); animation:tpIn .25s;">${esc(state.toast.msg)}</div>`; }
+
+function render(){ renderMain(); renderNav(); renderSheet(); renderDetail(); renderData(); renderLightbox(); renderToast(); }
+
+/* ============================================================
+   DISPATCH
+   ============================================================ */
+const ACTIONS={
+  noop:()=>{},
+  goToday:()=>{ state.view='today'; renderMain(); renderNav(); window.scrollTo(0,0); },
+  goJournal:()=>{ state.view='journal'; renderMain(); renderNav(); window.scrollTo(0,0); },
+  goInsights:()=>{ state.view='insights'; renderMain(); renderNav(); window.scrollTo(0,0); },
+  prevDay:()=>shiftDay(-1), nextDay:()=>shiftDay(1),
+  setBias:a=>setBias(a), setPlanGrade:a=>setPlanGrade(a),
+  openSheet:()=>openSheet(), closeSheet:()=>closeSheet(), saveTrade:()=>saveTrade(),
+  setMode:a=>mutSheet({mode:a}),
+  pickCam:()=>$('#file-cam').click(), pickUp:()=>$('#file-up').click(), removePhoto:()=>mutSheet({photoFull:null,photoThumb:null}),
+  setDir:a=>mutSheet({direction: state.sheet.direction===a?null:a}),
+  setR:a=>mutSheet({r:Number(a)}),
+  rUp:()=>mutSheet({r:Math.round(((Number(state.sheet.r)||0)+0.25)*100)/100}),
+  rDown:()=>mutSheet({r:Math.round(((Number(state.sheet.r)||0)-0.25)*100)/100}),
+  toggleConf:a=>{ const c={...state.sheet.conf}; c[a]=!c[a]; mutSheet({conf:c}); },
+  toggleConfAdd:()=>{ state.adding.conf=!state.adding.conf; renderSheet(); },
+  addConf:()=>{ addToList('confluences', state.addVal.conf); state.adding.conf=false; state.addVal.conf=''; renderSheet(); },
+  setStop:a=>mutSheet({sl: state.sheet.sl===a?null:a}),
+  toggleStopAdd:()=>{ state.adding.stop=!state.adding.stop; renderSheet(); },
+  addStop:()=>{ addToList('stops', state.addVal.stop); state.adding.stop=false; state.addVal.stop=''; renderSheet(); },
+  setTp:a=>mutSheet({tp: state.sheet.tp===a?null:a}),
+  toggleTpAdd:()=>{ state.adding.tp=!state.adding.tp; renderSheet(); },
+  addTp:()=>{ addToList('tps', state.addVal.tp); state.adding.tp=false; state.addVal.tp=''; renderSheet(); },
+  setGrade:a=>mutSheet({grade: state.sheet.grade===a?null:a}),
+  toggleMore:()=>{ state.moreOpen=!state.moreOpen; renderSheet(); },
+  setTarget:a=>mutSheet({target: state.sheet.target===a?null:a}),
+  setExit:a=>mutSheet({exit: state.sheet.exit===a?null:a}),
+  setTime:a=>mutSheet({time: state.sheet.time===a?'':a}),
+  openDetail:a=>openDetail(a), closeDetail:()=>closeDetail(), editDetail:()=>editDetail(), deleteDetail:()=>deleteDetail(),
+  zoomPhoto:()=>{ if(state.detailPhoto){ state.lightboxSrc=state.detailPhoto; renderLightbox(); } },
+  openData:()=>{ state.dataOpen=true; renderData(); }, closeData:()=>{ state.dataOpen=false; state.importOpen=false; renderData(); },
+  exportJSON:()=>exportJSON(), toggleImport:()=>{ state.importOpen=!state.importOpen; renderData(); }, doImport:()=>doImport(),
+  setScope:a=>{ state.insScope=a; renderMain(); }, setFilter:a=>{ state.jFilter=a; renderMain(); },
+  addList:a=>{ addToList(a, state.manageVal[a]); state.manageVal[a]=''; renderData(); },
+  removeList:a=>{ const i=a.indexOf('|'); removeFromList(a.slice(0,i), a.slice(i+1)); renderData(); renderSheet(); },
+  closeLightbox:()=>{ state.lightboxSrc=null; renderLightbox(); }
+};
+document.addEventListener('click', e=>{ const t=e.target.closest('[data-act]'); if(!t) return; const fn=ACTIONS[t.dataset.act]; if(fn) fn(t.dataset.arg, e); });
+document.addEventListener('input', e=>{ const t=e.target.closest('[data-input]'); if(!t) return; const spec=t.dataset.input, v=t.value;
+  if(spec.startsWith('day:')) setDay(spec.slice(4), v);
+  else if(spec==='sheet:r') state.sheet.r=(v===''?null:parseFloat(v));
+  else if(spec==='sheet:time') state.sheet.time=v;
+  else if(spec==='sheet:note') state.sheet.note=v;
+  else if(spec==='importText') state.importText=v;
+  else if(spec.startsWith('add:')) state.addVal[spec.slice(4)]=v;
+  else if(spec.startsWith('manage:')) state.manageVal[spec.slice(7)]=v;
+});
+document.addEventListener('change', e=>{ const t=e.target.closest('[data-time]'); if(!t) return; const n=normalizeTime(t.value); state.sheet.time=n; t.value=n; });
+document.addEventListener('keydown', e=>{ if(e.key!=='Enter') return; const t=e.target.closest('[data-enter]'); if(!t) return; e.preventDefault(); const spec=t.dataset.enter;
+  if(spec==='addConf') ACTIONS.addConf();
+  else if(spec==='addStop') ACTIONS.addStop();
+  else if(spec==='addTp') ACTIONS.addTp();
+  else if(spec.startsWith('manage:')){ const kind=spec.slice(7); addToList(kind, state.manageVal[kind]); state.manageVal[kind]=''; renderData(); }
+});
+$('#file-cam').addEventListener('change', e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); e.target.value=''; });
+$('#file-up').addEventListener('change', e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); e.target.value=''; });
+window.addEventListener('paste', e=>{ if(!state.sheetOpen) return; const items=e.clipboardData&&e.clipboardData.items; if(!items) return; for(const it of items){ if(it.type&&it.type.startsWith('image/')){ handleImage(it.getAsFile()); e.preventDefault(); break; } } });
+window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ state.sheetOpen=false; state.detailId=null; state.dataOpen=false; state.lightboxSrc=null; render(); } });
+
+/* ============================================================
+   INIT
+   ============================================================ */
+async function init(){
+  let settings={}, trades=[], days={};
+  try{
+    const st=await dbGet('tape_settings'); if(st) settings=st;
+    const tr=await dbGet('tape_trades'); if(Array.isArray(tr)) trades=tr;
+    const dk=await dbKeys('tape_day_'); for(const k of dk){ const d=await dbGet(k); if(d&&d.date) days[d.date]=d; }
+  }catch(e){}
+  settings=ensureLists(settings);
+  trades.forEach(t=>{ if(!t.conf) t.conf={}; if(!t.mode) t.mode='live'; });
+  state.settings=settings; state.trades=trades; state.days=days; state.ready=true;
+  render();
+}
+init();
+
+if(!HAS_CLAUDE){
+  if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
+  if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+}
+
+</script>
+</body>
+</html>
