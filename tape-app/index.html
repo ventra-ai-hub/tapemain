@@ -154,6 +154,18 @@ function fmtDate(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLo
 function fmtWeekday(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'}); }
 function fmtDateLong(iso){ if(!iso) return ''; return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'}); }
 function parseTime(str){ if(!str) return null; const m=String(str).match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i); if(!m) return null; let h=+m[1]; const mi=+m[2]; const ap=(m[3]||'').toLowerCase(); if(ap==='pm'&&h<12) h+=12; if(ap==='am'&&h===12) h=0; return h*60+mi; }
+function normalizeTime(str){
+  if(str==null) return ''; str=String(str).trim(); if(!str) return '';
+  const ap=str.match(/([ap])\.?\s*m/i); const digits=str.replace(/[^0-9]/g,''); if(!digits) return str;
+  let h,m;
+  if(digits.length<=2){ h=parseInt(digits,10); m=0; } else { h=parseInt(digits.slice(0,digits.length-2),10); m=parseInt(digits.slice(-2),10); }
+  if(isNaN(h)) return str; if(m>59) m=59;
+  let mer;
+  if(ap){ mer=ap[1].toLowerCase()==='p'?'PM':'AM'; if(h>12) h-=12; }
+  else { if(h===0){ h=12; mer='AM'; } else if(h>=13&&h<=23){ h-=12; mer='PM'; } else if(h===12){ mer='PM'; } else if(h>=8&&h<=11){ mer='AM'; } else { mer='PM'; } }
+  if(h<1||h>12) h=((h+11)%12)+1;
+  return h+':'+String(m).padStart(2,'0')+' '+mer;
+}
 function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
 function gradeColor(g){ return g==='A'?C.sage:g==='B'?C.peri:g==='C'?C.peach:g==='D'?C.rose:C.dim2; }
 
@@ -201,7 +213,7 @@ async function saveTrade(){
   if(!f.direction){ toast('Pick a direction',true); return; }
   const id=state.editingId||uid();
   const prev=state.editingId?state.trades.find(t=>t.id===id):null;
-  const rec={ id, mode:f.mode||'live', date:f.date||todayISO(), time:f.time||'', direction:f.direction,
+  const rec={ id, mode:f.mode||'live', date:f.date||todayISO(), time:normalizeTime(f.time)||'', direction:f.direction,
     conf:Object.fromEntries(Object.entries(f.conf||{}).filter(([k,v])=>v)), sl:f.sl||null, target:f.target||null, tp:f.tp||null,
     r:(f.r===''||f.r===null||f.r===undefined||isNaN(f.r))?null:Number(f.r), exit:f.exit||null, grade:f.grade||null, note:f.note||'',
     hasPhoto:!!f.photoFull, thumb:f.photoThumb||null, createdAt: prev?prev.createdAt:Date.now(), updatedAt:Date.now() };
@@ -470,7 +482,7 @@ function renderSheet(){
     ? `<div style="position:relative; border-radius:14px; overflow:hidden; margin-bottom:16px; background:var(--deep);"><img src="${f.photoFull}" alt="" style="display:block; width:100%; max-height:300px; object-fit:contain;"><button data-act="removePhoto" style="position:absolute; top:9px; right:9px; width:32px; height:32px; border-radius:9px; background:rgba(10,10,12,.7); border:1px solid var(--faint); display:grid; place-items:center; backdrop-filter:blur(5px);"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button></div>`
     : `<div id="drop-zone" style="border:1.5px dashed var(--faint); border-radius:14px; padding:18px 16px; text-align:center; margin-bottom:16px; background:oklch(0.21 0.006 70);"><div style="display:flex; gap:9px; justify-content:center; margin-bottom:11px;"><button data-act="pickCam" style="display:inline-flex; align-items:center; gap:7px; padding:10px 15px; border-radius:11px; background:var(--raised); font:600 13px 'Hanken Grotesk'; color:oklch(0.9 0.01 80);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--peri)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>Photo</button><button data-act="pickUp" style="display:inline-flex; align-items:center; gap:7px; padding:10px 15px; border-radius:11px; background:var(--raised); font:600 13px 'Hanken Grotesk'; color:oklch(0.9 0.01 80);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--peri)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Upload</button></div><div style="font:500 12px 'Hanken Grotesk'; color:oklch(0.58 0.012 75); line-height:1.5;">Drop a chart, or paste a screenshot <span style="font:600 11px 'JetBrains Mono'; background:var(--raised); padding:1px 6px; border-radius:5px;">⌘V</span></div></div>`;
   const moreBlock = state.moreOpen ? `<div style="padding:4px 0 6px;">
-    <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Time (ET)</div><input type="text" data-input="sheet:time" value="${esc(f.time||'')}" placeholder="9:45 AM" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:10px 12px; color:oklch(0.92 0.01 80); font:600 14px 'JetBrains Mono';"></div>
+    <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:8px;">Time (ET)</div><div style="display:flex; flex-wrap:wrap; gap:7px; margin-bottom:9px;">${['9:30 AM','9:45 AM','10:00 AM','10:30 AM','11:00 AM'].map(tt=>`<button data-act="setTime" data-arg="${tt}" style="${chip(f.time===tt, C.peri)}">${tt.replace(/ [AP]M$/,'')}</button>`).join('')}</div><input type="text" inputmode="numeric" data-input="sheet:time" data-time="1" value="${esc(f.time||'')}" placeholder="or type — 930 becomes 9:30 AM" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:600 14px 'JetBrains Mono';"></div>
     <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Target</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${targetChips}</div></div>
     <div style="margin-bottom:13px;"><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">Exit reason</div><div style="display:flex; flex-wrap:wrap; gap:7px;">${exitChips}</div></div>
     <div><div style="font:600 11px 'Hanken Grotesk'; color:var(--dim); margin-bottom:7px;">What happened?</div><textarea data-input="sheet:note" rows="3" placeholder="How did it play out, and why?" style="width:100%; background:var(--raised); border:1px solid transparent; border-radius:11px; padding:11px 13px; color:oklch(0.92 0.01 80); font:500 14px/1.6 'Hanken Grotesk';">${esc(f.note||'')}</textarea></div>
@@ -499,7 +511,7 @@ function renderSheet(){
         <button data-act="saveTrade" style="width:100%; margin-top:14px; padding:16px; border-radius:14px; background:var(--peri); font:700 15px 'Hanken Grotesk'; color:var(--peri-ink); box-shadow:0 8px 22px var(--peri-glow);">${state.editingId?'Save changes':'Log trade'}</button>
       </div>`;
   if(!$('#sheet-card')){
-    root.innerHTML=`<div data-act="closeSheet" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;"><div id="sheet-card" data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:92vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);"><div id="sheet-inner"></div></div></div>`;
+    root.innerHTML=`<div data-act="noop" style="position:fixed; inset:0; z-index:100; background:rgba(8,8,10,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:tpFade .2s;"><div id="sheet-card" data-act="noop" class="noscroll" style="width:100%; max-width:480px; max-height:92vh; overflow-y:auto; background:var(--sheet); border-radius:24px 24px 0 0; border-top:1px solid var(--border); animation:tpUp .3s cubic-bezier(.2,.85,.25,1);"><div id="sheet-inner"></div></div></div>`;
   }
   $('#sheet-inner').innerHTML = inner;
   if(!f.photoFull){ const dz=$('#drop-zone'); if(dz){ const st=e=>e.preventDefault(); dz.addEventListener('dragover',st); dz.addEventListener('dragenter',st); dz.addEventListener('drop',e=>{ e.preventDefault(); const fl=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(fl) handleImage(fl); }); } }
@@ -622,6 +634,7 @@ const ACTIONS={
   toggleMore:()=>{ state.moreOpen=!state.moreOpen; renderSheet(); },
   setTarget:a=>mutSheet({target: state.sheet.target===a?null:a}),
   setExit:a=>mutSheet({exit: state.sheet.exit===a?null:a}),
+  setTime:a=>mutSheet({time: state.sheet.time===a?'':a}),
   openDetail:a=>openDetail(a), closeDetail:()=>closeDetail(), editDetail:()=>editDetail(), deleteDetail:()=>deleteDetail(),
   zoomPhoto:()=>{ if(state.detailPhoto){ state.lightboxSrc=state.detailPhoto; renderLightbox(); } },
   openData:()=>{ state.dataOpen=true; renderData(); }, closeData:()=>{ state.dataOpen=false; state.importOpen=false; renderData(); },
@@ -641,6 +654,7 @@ document.addEventListener('input', e=>{ const t=e.target.closest('[data-input]')
   else if(spec.startsWith('add:')) state.addVal[spec.slice(4)]=v;
   else if(spec.startsWith('manage:')) state.manageVal[spec.slice(7)]=v;
 });
+document.addEventListener('change', e=>{ const t=e.target.closest('[data-time]'); if(!t) return; const n=normalizeTime(t.value); state.sheet.time=n; t.value=n; });
 document.addEventListener('keydown', e=>{ if(e.key!=='Enter') return; const t=e.target.closest('[data-enter]'); if(!t) return; e.preventDefault(); const spec=t.dataset.enter;
   if(spec==='addConf') ACTIONS.addConf();
   else if(spec==='addStop') ACTIONS.addStop();
